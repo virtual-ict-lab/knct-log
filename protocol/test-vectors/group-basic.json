@@ -1,0 +1,69 @@
+{
+  "description": "Ed25519 の秘密鍵 seed（base64url）と、そこから作ったレコード。各実装は id = base64url(sha256(payload)) と署名検証、導出結果を確認する。暗号文（ct / key.wrap）は乱数を含むので値の一致は確認しない。",
+  "keys": {
+    "alice": {
+      "seed": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+      "pub": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w"
+    },
+    "bob": {
+      "seed": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI",
+      "pub": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q"
+    }
+  },
+  "records": [
+    {
+      "id": "62hpaPG3IZZ4n5Zp_tYdvl3p2F02u8Y6wg0imZm3S5M",
+      "kind": "group.create",
+      "envelope": {
+        "payload": "eyJncm91cCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJraW5kIjoiZ3JvdXAuY3JlYXRlIiwiZGVwcyI6W10sImJvZHkiOnsia3giOiJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFIn0sInYiOjEsImF1dGhvciI6ImlvamozWFFKOFpYOVV0c3RQTHBkY3NwbkNiOGRsQkliODNTSUFiUVBiMXciLCJ0cyI6MTc5MjA1NTU5NjY0OX0",
+        "sig": "AjfasVWULg2PGIwcKg-6MHkJSo2IORoVEQAl8OT1T-KaJ2M3vvz2YVXLROGId98AKoCtdjwS5yiFgMi0ykhKAw"
+      }
+    },
+    {
+      "id": "lIziRmHPuagCY_RayU28Ty-xGtoXu9O29QMFlrAMOws",
+      "kind": "key.wrap",
+      "envelope": {
+        "payload": "eyJncm91cCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJraW5kIjoia2V5LndyYXAiLCJlcG9jaCI6IjYyaHBhUEczSVpaNG41WnBfdFlkdmwzcDJGMDJ1OFk2d2cwaW1abTNTNU0iLCJkZXBzIjpbIjYyaHBhUEczSVpaNG41WnBfdFlkdmwzcDJGMDJ1OFk2d2cwaW1abTNTNU0iXSwiYm9keSI6eyJ0byI6ImlvamozWFFKOFpYOVV0c3RQTHBkY3NwbkNiOGRsQkliODNTSUFiUVBiMXciLCJlbmMiOiJuNVl1MHg5RDEtQ09ZZ1I4Smo2VnczZkFrdzg4cmZ3T3ZMZjF4dEJzZUdzIiwiY3QiOiIwWnR1ZjBHNS1IQXdMYld1Q0tRWF9WRnBkRkVFdGtPZXFDamZ6U0N3WDVzX1VVMlBkTmVhb0JKOFVPcnc5UzI3In0sInYiOjEsImF1dGhvciI6ImlvamozWFFKOFpYOVV0c3RQTHBkY3NwbkNiOGRsQkliODNTSUFiUVBiMXciLCJ0cyI6MTc5MjA1NTU5NjY1MX0",
+        "sig": "SF3VgLi1RVctmSJoKHUw4yJjCiEgOg9xTwhms7DWWDOt5P5_Vk8qc7p5eWqorIMHFQva926hMvNeft3f_FzGBA"
+      }
+    },
+    {
+      "id": "o4hQZ_QCpWA09-tVoWSMiEqAHFeX4PLVYWt-xspxi3A",
+      "kind": "group.settings",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbIjYyaHBhUEczSVpaNG41WnBfdFlkdmwzcDJGMDJ1OFk2d2cwaW1abTNTNU0iXSwidHMiOjE3OTIwNTU1OTY2NTIsImdyb3VwIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQSIsImtpbmQiOiJncm91cC5zZXR0aW5ncyIsImVwb2NoIjoiNjJocGFQRzNJWlo0bjVacF90WWR2bDNwMkYwMnU4WTZ3ZzBpbVptM1M1TSIsImN0IjoiVEppYXdLWVNEX0J5LWxBQlpGSDZjd1RhSXk2YVdJcVZHMk1aN1lMSnoyYW16ZjE4eG1pd21oMXd0MlJqIiwidiI6MSwiYXV0aG9yIjoiaW9qajNYUUo4Wlg5VXRzdFBMcGRjc3BuQ2I4ZGxCSWI4M1NJQWJRUGIxdyJ9",
+        "sig": "Ul_1JIoGn41dPjdIIiqwkipj7D9tKCi3yUOrbOxbFAucKJhFTjlPOHzM81Z3AnLTy2wm7d7EqH3pFVm630xOBg"
+      }
+    },
+    {
+      "id": "elATCYAzI5-dpeVhSiyFxitLuTlS0FdAyCb2G_bcZc8",
+      "kind": "invite",
+      "envelope": {
+        "payload": "eyJncm91cCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJraW5kIjoiaW52aXRlIiwiZGVwcyI6WyJvNGhRWl9RQ3BXQTA5LXRWb1dTTWlFcUFIRmVYNFBMVllXdC14c3B4aTNBIl0sImJvZHkiOnsidGgiOiIwWEJnOUxILUNwZTBWNGFKcmg0OWZlSXBJY0xuR05nVldROU16Z0lJN2M4IiwiZXhwIjoxNzkyNjYwMzk2NjUyfSwidiI6MSwiYXV0aG9yIjoiaW9qajNYUUo4Wlg5VXRzdFBMcGRjc3BuQ2I4ZGxCSWI4M1NJQWJRUGIxdyIsInRzIjoxNzkyMDU1NTk2NjUyfQ",
+        "sig": "REf9FcdyBTBW_Iyumc251hhMj88aKG9JVhSM9Ujq8fH3yJnSi7Ia8DbQeWlgxBqw-ITp_J5IhPAmlHueDSFbCA"
+      }
+    },
+    {
+      "id": "r2Bh33CXJPHsNsUf9aieuK6-NPUBPXlzB5EcQ6Vp1uQ",
+      "kind": "member.join",
+      "envelope": {
+        "payload": "eyJncm91cCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJraW5kIjoibWVtYmVyLmpvaW4iLCJkZXBzIjpbImVsQVRDWUF6STUtZHBlVmhTaXlGeGl0THVUbFMwRmRBeUNiMkdfYmNaYzgiXSwiYm9keSI6eyJreCI6IklpSWlJaUlpSWlJaUlpSWlJaUlpSWlJaUlpSWlJaUlpSWlJaUlpSWlJaUkiLCJpbnZpdGUiOiJlbEFUQ1lBekk1LWRwZVZoU2l5RnhpdEx1VGxTMEZkQXlDYjJHX2JjWmM4IiwidG9rZW4iOiJPaDVIUjNWdkFybEN3WVpmekp0WFQwUnd4M3ZKa1lPWlNCWWUxd0VJWXY4In0sInYiOjEsImF1dGhvciI6ImdUbDNEcWg5RjE5V28xUm13MHgtek11TmlwRzA3amVpWGZZUFc0X0pzNVEiLCJ0cyI6MTc5MjA1NTU5NjY1Mn0",
+        "sig": "Gti7vOfcDdw-19MdlE03SpNmWXGYfAO2r3d26OREJoMHaV_iUAkGbQO4ZVUyD_dNqo8ErPjiP9fyovYWpZJTBg"
+      }
+    }
+  ],
+  "expected": {
+    "admin": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+    "members": [
+      "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w"
+    ],
+    "currentEpoch": "62hpaPG3IZZ4n5Zp_tYdvl3p2F02u8Y6wg0imZm3S5M",
+    "applied": [
+      "62hpaPG3IZZ4n5Zp_tYdvl3p2F02u8Y6wg0imZm3S5M",
+      "elATCYAzI5-dpeVhSiyFxitLuTlS0FdAyCb2G_bcZc8",
+      "o4hQZ_QCpWA09-tVoWSMiEqAHFeX4PLVYWt-xspxi3A",
+      "r2Bh33CXJPHsNsUf9aieuK6-NPUBPXlzB5EcQ6Vp1uQ"
+    ]
+  }
+}

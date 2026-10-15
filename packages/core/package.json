@@ -1,0 +1,20 @@
+{
+  "name": "@knct-log/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@hpke/core": "1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
+  }
+}

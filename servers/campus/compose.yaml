@@ -1,0 +1,14 @@
+services:
+  knct-log:
+    build:
+      context: ../..
+      dockerfile: servers/campus/Dockerfile
+      args:
+        VITE_ENDPOINTS: ${VITE_ENDPOINTS:-}
+        VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+    env_file: .env
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:3000:3000" # TLS はリバースプロキシで終端する
+    restart: unless-stopped

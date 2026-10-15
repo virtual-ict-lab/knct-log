@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - servers/*
+  - apps/*
+
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+minimumReleaseAgeExclude:
+  - react-dom@19.3.1
+  - react@19.3.1

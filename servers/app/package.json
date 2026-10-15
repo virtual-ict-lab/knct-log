@@ -1,0 +1,19 @@
+{
+  "name": "@knct-log/server-app",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
+    "@knct-log/core": "workspace:*",
+    "hono": "4.13.13"
+  }
+}
