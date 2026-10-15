@@ -1,0 +1,20 @@
+{
+  "name": "@knct-log/conformance",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/suite.ts"
+  },
+  "scripts": {
+    "test:remote": "vitest run test/remote.test.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@knct-log/core": "workspace:*",
+    "vitest": "5.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "7.0.2"
+  }
+}

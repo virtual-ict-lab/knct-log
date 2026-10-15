@@ -1,0 +1,27 @@
+{
+  "name": "@knct-log/server-campus",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "node --watch src/main.ts",
+    "keygen": "node src/keygen.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.5",
+    "@knct-log/core": "workspace:*",
+    "@knct-log/server-app": "workspace:*",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@knct-log/conformance": "workspace:*",
+    "@types/node": "^26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
+  },
+  "exports": {
+    "./testing": "./test/helpers.ts"
+  }
+}

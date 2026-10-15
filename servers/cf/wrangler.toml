@@ -1,0 +1,25 @@
+name = "knct-log"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+SERVER_ID = "cf"
+# 学内サーバーのピア公開鍵（servers/campus の `pnpm keygen` で表示される）
+PEER_KEYS = ""
+VAPID_SUBJECT = "mailto:admin@example.com"
+VAPID_PUBLIC_KEY = ""
+
+# SECRET / VAPID_PRIVATE_KEY / R2_* は `wrangler secret put` で設定する（ローカルは .dev.vars）
+
+[[d1_databases]]
+binding = "DB"
+database_name = "knct-log"
+database_id = "00000000-0000-0000-0000-000000000000" # `wrangler d1 create knct-log` の値に置き換える
+migrations_dir = "../app/migrations"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "knct-log-blobs"
+
+[triggers]
+crons = ["0 * * * *"]
