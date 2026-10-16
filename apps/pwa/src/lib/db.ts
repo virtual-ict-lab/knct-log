@@ -5,6 +5,8 @@ import type { DeviceKeys, Envelope, Header } from "@knct-log/core";
 export interface StoredAccount {
   keys: DeviceKeys;
   name: string;
+  /** 自分のアイコン（data URL）。アカウント文書の bundle と同じ内容 */
+  icon?: string;
   /** bundle とロック解除手段を開く鍵。名前の変更やパスキー・端末の追加に使う */
   amk: Uint8Array<ArrayBuffer>;
   /** 手元にある最新のアカウント文書 */

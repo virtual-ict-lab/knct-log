@@ -27,7 +27,12 @@ export function GroupPage({ group }: { group: string }) {
 
   return (
     <Screen
-      title={view.name ?? "…"}
+      title={
+        <span className="bar-title">
+          <Avatar id={group} name={view.name} size={28} />
+          <span>{view.name ?? "…"}</span>
+        </span>
+      }
       back="/"
       actions={
         view.isMember && (

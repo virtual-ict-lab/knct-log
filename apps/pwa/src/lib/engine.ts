@@ -10,6 +10,7 @@ import {
   type GroupState,
   type PostContent,
   type Profile,
+  isIcon,
   type ReactionContent,
   type ReplyContent,
   type Unlock,
@@ -65,6 +66,9 @@ export interface Connection {
 export interface GroupView {
   group: string;
   name: string | null;
+  icon?: string;
+  /** 名前・アイコンを変えられる（管理者、または管理者が許可したメンバー） */
+  canEdit: boolean;
   joining: boolean;
   state: GroupState | null;
   isMember: boolean;
@@ -126,6 +130,22 @@ export class Engine extends EventTarget {
     return this.account?.name ?? "";
   }
 
+  get icon() {
+    return this.account?.icon;
+  }
+
+  /** 表示用アイコンの覚え書き（アカウントの公開鍵 / グループ ID → data URL）。Avatar が引く */
+  readonly icons = new Map<string, string>();
+
+  private rememberIcon(id: string, icon: string | undefined) {
+    if (icon && isIcon(icon)) this.icons.set(id, icon);
+    else this.icons.delete(id);
+  }
+
+  private profile(): Profile {
+    return this.icon ? { name: this.name, icon: this.icon } : { name: this.name };
+  }
+
   private actor(): Actor & { kx: CryptoKeyPair } {
     const k = this.account!.keys;
     return { signer: cryptoKeySigner(k.signPub, k.sign.privateKey), kxPub: k.kxPub, kx: k.kx };
@@ -146,8 +166,8 @@ export class Engine extends EventTarget {
     this.changed();
   }
 
-  private async storeAccount(keys: DeviceKeys, name: string, amk: Uint8Array<ArrayBuffer>, doc: Envelope, docTs: number, dirty: boolean) {
-    await this.saveAccount({ keys, name, amk, doc, docTs, dirty });
+  private async storeAccount(keys: DeviceKeys, name: string, icon: string | undefined, amk: Uint8Array<ArrayBuffer>, doc: Envelope, docTs: number, dirty: boolean) {
+    await this.saveAccount({ keys, name, icon, amk, doc, docTs, dirty });
   }
 
   /** 新しいアカウントを作る。passkey があれば、その PRF で鍵をバックアップする（なければこの端末だけ） */
@@ -162,7 +182,7 @@ export class Engine extends EventTarget {
     const keys = await importAccountKeys(secret);
     const doc: AccountDoc = { v: 1, account: secret.signPub, ts: Date.now(), bundle: await sealBundle(amk, secret), unlocks };
     const signer = cryptoKeySigner(keys.signPub, keys.sign.privateKey);
-    await this.storeAccount(keys, name, amk, await signAccountDoc(signer, doc), doc.ts, true);
+    await this.storeAccount(keys, name, undefined, amk, await signAccountDoc(signer, doc), doc.ts, true);
     void this.sync();
   }
 
@@ -189,7 +209,7 @@ export class Engine extends EventTarget {
 
   private async restore(doc: AccountDoc, env: Envelope, amk: Uint8Array<ArrayBuffer>) {
     const secret = await openBundle(amk, doc);
-    await this.storeAccount(await importAccountKeys(secret), secret.name, amk, env, doc.ts, false);
+    await this.storeAccount(await importAccountKeys(secret), secret.name, secret.icon, amk, env, doc.ts, false);
     await this.sync();
   }
 
@@ -276,8 +296,8 @@ export class Engine extends EventTarget {
     const doc = await openAccountDoc(remote);
     if (doc.ts <= a.docTs) return;
     const secret = await openBundle(a.amk, doc);
-    if (secret.name !== a.name) await this.forgetProfiles();
-    await this.saveAccount({ ...a, name: secret.name, doc: remote, docTs: doc.ts });
+    if (secret.name !== a.name || secret.icon !== a.icon) await this.forgetProfiles();
+    await this.saveAccount({ ...a, name: secret.name, icon: secret.icon, doc: remote, docTs: doc.ts });
   }
 
   private async forgetProfiles() {
@@ -295,11 +315,19 @@ export class Engine extends EventTarget {
   }
 
   async rename(name: string) {
+    await this.updateMe({ name });
+  }
+
+  /** 自分の表示名・アイコンを変える。icon は null で外す。アカウント文書に入れて端末間で引き継ぐ */
+  async updateMe(patch: { name?: string; icon?: string | null }) {
+    if (patch.icon && !isIcon(patch.icon)) throw new Error("アイコンが大きすぎます");
+    const name = patch.name ?? this.name;
+    const icon = patch.icon === undefined ? this.icon : (patch.icon ?? undefined);
     await this.mutateDoc(async (_d, secret) => {
-      const s = await secret();
-      return { bundle: await sealBundle(this.account!.amk, { ...s, name }) };
+      const { icon: _old, ...s } = await secret();
+      return { bundle: await sealBundle(this.account!.amk, icon ? { ...s, name, icon } : { ...s, name }) };
     });
-    await this.saveAccount({ ...this.account!, name });
+    await this.saveAccount({ ...this.account!, name, icon });
     await this.forgetProfiles(); // 各グループのプロフィールは次の maintain で出し直す
   }
 
@@ -544,7 +572,7 @@ export class Engine extends EventTarget {
     const hasMine = (kind: string) =>
       recs.some((r) => r.kind === kind && r.header.author === me && r.header.epoch === s.currentEpoch);
     if (!hasMine("profile") || !(await this.db.get("meta", `profile/${group}`))) {
-      await this.enqueue(group, [await setProfile(actor, s, key, { name: this.name })]);
+      await this.enqueue(group, [await setProfile(actor, s, key, this.profile())]);
       await this.db.put("meta", true, `profile/${group}`);
     }
     if (isAdmin && s.settings.recordId && byId.get(s.settings.recordId)?.header.epoch !== s.currentEpoch) {
@@ -561,7 +589,7 @@ export class Engine extends EventTarget {
     await this.db.put("keys", g.key, `${g.group}/${g.epoch}`);
     await this.db.put("groups", { group: g.group, addedAt: Date.now() });
     const s = await deriveGroupState(g.group, g.records);
-    const profile = await setProfile(actor, s, g.key, { name: this.name });
+    const profile = await setProfile(actor, s, g.key, this.profile());
     await this.db.put("meta", true, `profile/${g.group}`);
     await this.enqueue(g.group, [...g.records, profile]);
     void this.sync();
@@ -614,11 +642,11 @@ export class Engine extends EventTarget {
     await this.sync();
   }
 
-  async updateGroupSettings(group: string, meta: GroupMeta, pub: { hours?: [number, number] }) {
+  async updateGroupSettings(group: string, meta: GroupMeta, pub: { hours?: [number, number]; editableBy?: "admin" | "members" } = {}) {
     const s = await this.state(group);
     const key = await this.key(group, s.currentEpoch!);
     if (!key) throw new Error("グループ鍵がまだありません");
-    await this.enqueue(group, [await updateSettings(this.actor(), s, key, meta, { ...pub, utcOffsetMin: -new Date().getTimezoneOffset() })]);
+    await this.enqueue(group, [await updateSettings(this.actor(), s, key, meta, pub.hours ? { ...pub, utcOffsetMin: -new Date().getTimezoneOffset() } : pub)]);
     void this.sync();
   }
 
@@ -684,14 +712,15 @@ export class Engine extends EventTarget {
   }
 
   private async profiles(group: string, recs: LocalRecord[]) {
-    const names = new Map<string, { name: string; ts: number }>();
+    const names = new Map<string, { name: string; icon?: string; ts: number }>();
     for (const r of recs) {
       if (r.kind !== "profile") continue;
       const p = await this.open<Profile>(group, r);
       if (!p) continue;
       const cur = names.get(r.header.author);
-      if (!cur || cur.ts < r.ts) names.set(r.header.author, { name: p.name, ts: r.ts });
+      if (!cur || cur.ts < r.ts) names.set(r.header.author, { name: p.name, icon: p.icon, ts: r.ts });
     }
+    for (const [pk, p] of names) this.rememberIcon(pk, p.icon);
     return names;
   }
 
@@ -707,12 +736,17 @@ export class Engine extends EventTarget {
     const recs = await this.records(group);
     const s = await deriveGroupState(group, recs);
     const names = await this.profiles(group, recs);
+    const meta = await this.groupMeta(group, s);
+    this.rememberIcon(group, meta?.icon);
+    const isMember = !!me && s.members.has(me);
     return {
       group,
-      name: (await this.groupMeta(group, s))?.name ?? null,
+      name: meta?.name ?? null,
+      icon: meta?.icon && isIcon(meta.icon) ? meta.icon : undefined,
+      canEdit: isMember && (s.admin === me || s.settings.editableBy === "members"),
       joining: local?.joining ?? false,
       state: s,
-      isMember: !!me && s.members.has(me),
+      isMember,
       isAdmin: s.admin === me,
       hasKey: !!s.currentEpoch && !!(await this.key(group, s.currentEpoch)),
       members: [...s.members.values()].map((m) => ({

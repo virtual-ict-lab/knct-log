@@ -26,6 +26,8 @@ export interface GroupSettings {
   /** 毎時プロンプトを送る時間帯 [開始, 終了)（ローカル時刻の時） */
   hours: [number, number];
   utcOffsetMin: number;
+  /** グループ名・アイコンを変えられる人。"members" のとき管理者以外のメンバーも変えられる（既定は管理者のみ） */
+  editableBy: "admin" | "members";
   /** 暗号化された名前などを持つ group.settings レコード */
   recordId?: string;
 }
@@ -51,7 +53,7 @@ export interface GroupState {
   heads: string[];
 }
 
-export const DEFAULT_SETTINGS: GroupSettings = { hours: [8, 23], utcOffsetMin: 9 * 60 };
+export const DEFAULT_SETTINGS: GroupSettings = { hours: [8, 23], utcOffsetMin: 9 * 60, editableBy: "admin" };
 
 type Ctl = Pick<VerifiedRecord, "id" | "header">;
 
@@ -179,11 +181,23 @@ function apply(s: GroupState, r: Ctl, tokenHash: Map<string, string>): string | 
   const isAdmin = s.admin === h.author;
   switch (h.kind) {
     case "group.settings": {
-      if (!isAdmin) return "only admin can change settings";
+      if (!isAdmin) {
+        // 管理者以外は、editableBy が "members" のときに限り、名前とアイコン（ct）だけを変えられる。
+        // 公開フィールド（hours / utcOffsetMin / editableBy）を含むレコードは管理者のものだけが有効。
+        if (!isMember) return "only members can change settings";
+        if (s.settings.editableBy !== "members") return "only admin can change settings";
+        if (Object.keys(body).length > 0) return "members can only change name and icon";
+      }
       if (!s.epochs.has(h.epoch!)) return "unknown epoch";
       const hours = body.hours as [number, number] | undefined;
       const off = body.utcOffsetMin as number | undefined;
-      s.settings = { hours: hours ?? s.settings.hours, utcOffsetMin: off ?? s.settings.utcOffsetMin, recordId: r.id };
+      const by = body.editableBy as "admin" | "members" | undefined;
+      s.settings = {
+        hours: hours ?? s.settings.hours,
+        utcOffsetMin: off ?? s.settings.utcOffsetMin,
+        editableBy: by ?? s.settings.editableBy,
+        recordId: r.id,
+      };
       return null;
     }
     case "invite": {

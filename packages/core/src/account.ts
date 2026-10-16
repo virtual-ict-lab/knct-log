@@ -21,6 +21,8 @@ export interface AccountSecret {
   signPub: string;
   kxPub: string;
   name: string;
+  /** 自分のアイコン（data URL。任意）。全グループ・全端末に引き継ぐためここに置く */
+  icon?: string;
 }
 
 export type UnlockKind = "passkey" | "link";
@@ -137,7 +139,7 @@ export function validateAccountDoc(d: unknown): asserts d is AccountDoc {
   if (r.v !== 1) fail("version");
   if (!isKey(r.account)) fail("account");
   if (!Number.isSafeInteger(r.ts)) fail("ts");
-  if (!b64u(r.bundle, 8192)) fail("bundle");
+  if (!b64u(r.bundle, 16384)) fail("bundle");
   if (!Array.isArray(r.unlocks) || r.unlocks.length > MAX_UNLOCKS) fail("unlocks");
   for (const u of r.unlocks as Record<string, unknown>[]) {
     if (typeof u !== "object" || u === null) fail("unlock");

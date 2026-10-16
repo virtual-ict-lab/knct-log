@@ -49,3 +49,27 @@ describe("account and reaction vectors", () => {
     }
   });
 });
+
+const perm = JSON.parse(readFileSync(new URL("../../../protocol/test-vectors/group-edit-permission.json", import.meta.url), "utf8"));
+
+describe("group edit permission vector", () => {
+  it("derives who may change name and icon, in any order", async () => {
+    const recs = [];
+    for (const r of perm.records) {
+      const v = await openRecord(r.envelope);
+      expect(v.id).toBe(r.id);
+      recs.push(v);
+    }
+    for (const list of [recs, [...recs].reverse()]) {
+      const s = await deriveGroupState(recs[0]!.header.group, list);
+      const e = perm.expected;
+      expect(s.admin).toBe(e.admin);
+      expect([...s.members.keys()].sort()).toEqual(e.members);
+      expect([...s.applied].sort()).toEqual(e.applied);
+      expect([...s.rejected.keys()].sort()).toEqual(e.rejected);
+      expect([s.settings.editableBy, s.settings.recordId, s.settings.hours]).toEqual([e.editableBy, e.settingsRecord, e.hours]);
+    }
+    const key = fromB64u(perm.groupKey);
+    for (const r of recs) if (perm.contents[r.id]) expect(await openContent(key, r.header)).toEqual(perm.contents[r.id]);
+  });
+});

@@ -1,0 +1,109 @@
+{
+  "description": "group.settings の編集権限。既定では管理者のみが名前・アイコンを変えられる。管理者が body.editableBy=\"members\" にすると、メンバーは body が空の group.settings（名前とアイコンだけ）を出せる。records は到着順に依らず同じ結果になる。expected.rejected は ID だけ確認する（理由の文言は実装依存）。",
+  "groupKey": "NGpatESKSQP0QqfX8DsqtthL8uwtYkgZ5Mi2zXLm2pE",
+  "records": [
+    {
+      "id": "LsaeZfM-E2ETpTsjCNYUO1Zb-BGOMoRTfxLrOHGzW04",
+      "kind": "group.create",
+      "envelope": {
+        "payload": "eyJncm91cCI6IlhFUy1aaVdVeDN5a3lNYXFEM2NLTHciLCJraW5kIjoiZ3JvdXAuY3JlYXRlIiwiZGVwcyI6W10sImJvZHkiOnsia3giOiJ3ak55RVRacy1kODhuZ2JCeGNCQ1BJWE5lcHhaRHhzVnoyR1o3Ujd0am1rIn0sInYiOjEsImF1dGhvciI6IjV4aTBOYkF2bFpHbjNKZzJBeDRaTklCaE5FR3Rqc0FxdEFObFFGWklDZWciLCJ0cyI6MTc5MjE2MDgwNDg1NX0",
+        "sig": "Ao0MZ1YMQy4xF3wOHzAazFgrJDjbpBSqgmNPXSONKClmylBDy17p3dCfxJq2P-h0w7p896ftbYqcqFbKWmQ7BA"
+      }
+    },
+    {
+      "id": "wB6vmtnsJAXr6M0sLtHaTFL-JsZ8eSYgoSNQDPiNIUo",
+      "kind": "key.wrap",
+      "envelope": {
+        "payload": "eyJncm91cCI6IlhFUy1aaVdVeDN5a3lNYXFEM2NLTHciLCJraW5kIjoia2V5LndyYXAiLCJlcG9jaCI6IkxzYWVaZk0tRTJFVHBUc2pDTllVTzFaYi1CR09Nb1JUZnhMck9IR3pXMDQiLCJkZXBzIjpbIkxzYWVaZk0tRTJFVHBUc2pDTllVTzFaYi1CR09Nb1JUZnhMck9IR3pXMDQiXSwiYm9keSI6eyJ0byI6IjV4aTBOYkF2bFpHbjNKZzJBeDRaTklCaE5FR3Rqc0FxdEFObFFGWklDZWciLCJlbmMiOiJIdU13VVZYTG0wUzVCcjI0OHRhYUVMd29EMmFjTEYzUURmSTg4MG9JRVQwIiwiY3QiOiJCS1lOMm1XLTJvajlkUHZFUkxSNzljem42ZzFKeHFRa3hiNFh5b3l0U193ejZHTmpCcDI1UzlHNXA0T1pzRzViIn0sInYiOjEsImF1dGhvciI6IjV4aTBOYkF2bFpHbjNKZzJBeDRaTklCaE5FR3Rqc0FxdEFObFFGWklDZWciLCJ0cyI6MTc5MjE2MDgwNDg1OH0",
+        "sig": "yG4exxA7bdtWHQDuM02bvklkQbmieJPbBMyjVNQYnCaEuojXkps-5wcUtnSzKzOM6015dJs-wcaQCQSJrZlbCg"
+      }
+    },
+    {
+      "id": "aCLQmVYKMlNUtfBT05gA1VLMLLKERhzOJeO-Uns1dsk",
+      "kind": "group.settings",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbIkxzYWVaZk0tRTJFVHBUc2pDTllVTzFaYi1CR09Nb1JUZnhMck9IR3pXMDQiXSwidHMiOjE3OTIxNjA4MDQ4NTgsImdyb3VwIjoiWEVTLVppV1V4M3lreU1hcUQzY0tMdyIsImtpbmQiOiJncm91cC5zZXR0aW5ncyIsImVwb2NoIjoiTHNhZVpmTS1FMkVUcFRzakNOWVVPMVpiLUJHT01vUlRmeExyT0hHelcwNCIsImN0IjoidmFEXy1ybkVYZEJvU2t2V3I1UUpIU25BSFVtQmZHU0V1ZUVJcWpGLVNxN2tXT1k0N1ZsNXg1Y0VYUENmIiwidiI6MSwiYXV0aG9yIjoiNXhpME5iQXZsWkduM0pnMkF4NFpOSUJoTkVHdGpzQXF0QU5sUUZaSUNlZyJ9",
+        "sig": "WYEuAVP4AWe5AjRW4lRaEpF1vSZA6hWPb6rYFM0t_46zH1YXZp87wzCM1cp1TRzb2zHCF0z3OyCYDa5pYsjGCQ"
+      }
+    },
+    {
+      "id": "Rumb0niI2nBR_ton_66MFpnrCP5Gb4nh_qYJl736F_Q",
+      "kind": "invite",
+      "envelope": {
+        "payload": "eyJncm91cCI6IlhFUy1aaVdVeDN5a3lNYXFEM2NLTHciLCJraW5kIjoiaW52aXRlIiwiZGVwcyI6WyJhQ0xRbVZZS01sTlV0ZkJUMDVnQTFWTE1MTEtFUmh6T0plTy1VbnMxZHNrIl0sImJvZHkiOnsidGgiOiJnVGhjWmF1MHZqZzdNeVctT1ZfN0UxaVlEbTFCTnRFSXBia1RvZGFDQ1JJIiwiZXhwIjoxNzkyNzY1NjA0ODU5fSwidiI6MSwiYXV0aG9yIjoiNXhpME5iQXZsWkduM0pnMkF4NFpOSUJoTkVHdGpzQXF0QU5sUUZaSUNlZyIsInRzIjoxNzkyMTYwODA0ODU5fQ",
+        "sig": "Bhcuf43iPiNyFcByyzH9wCiohBDgPm4O9Vl7fcCryOkKyL4zlPqUmTwWFZYpH_HyBDCWGiWXRXM6nCw1AxS4BA"
+      }
+    },
+    {
+      "id": "60YscB7SHQgLql3fu45LD-IVKgFAkAjHH3LA4kkEGBo",
+      "kind": "member.join",
+      "envelope": {
+        "payload": "eyJncm91cCI6IlhFUy1aaVdVeDN5a3lNYXFEM2NLTHciLCJraW5kIjoibWVtYmVyLmpvaW4iLCJkZXBzIjpbIlJ1bWIwbmlJMm5CUl90b25fNjZNRnBuckNQNUdiNG5oX3FZSmw3MzZGX1EiXSwiYm9keSI6eyJreCI6IkpoOHRaRDhOWGFRbzVodExlY0ZZLWhuRUFQXzVuZ0JRN0JGSXFfODF6aE0iLCJpbnZpdGUiOiJSdW1iMG5pSTJuQlJfdG9uXzY2TUZwbnJDUDVHYjRuaF9xWUpsNzM2Rl9RIiwidG9rZW4iOiJjNkwtcTVidy1xaGl6MFdLNWhfYkxMQUlXaXZVbEZGem5ZZWtmel9mV1FJIn0sInYiOjEsImF1dGhvciI6ImcyckFKZHBqWXZOeVZsNU1EM0hnY3d3R1BtS05udEd6RTJJTjRYS042TnMiLCJ0cyI6MTc5MjE2MDgwNDg1OX0",
+        "sig": "xGmj36yHn2tKYUEVuQofMd9_9pYbX3WXswlXHDzS7Kz_9qu-wlY1CP3yZe2W9upJgCjLBfkVlGEd5SMtnZwMCA"
+      }
+    },
+    {
+      "id": "dw__DHZ5Ixip5WNfuLo3qotkV5BI15T1kP90Mf0RVTQ",
+      "kind": "group.settings",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbIjYwWXNjQjdTSFFnTHFsM2Z1NDVMRC1JVktnRkFrQWpISDNMQTRra0VHQm8iXSwiYm9keSI6e30sInRzIjoxNzkyMTYwODA0ODU5LCJncm91cCI6IlhFUy1aaVdVeDN5a3lNYXFEM2NLTHciLCJraW5kIjoiZ3JvdXAuc2V0dGluZ3MiLCJlcG9jaCI6IkxzYWVaZk0tRTJFVHBUc2pDTllVTzFaYi1CR09Nb1JUZnhMck9IR3pXMDQiLCJjdCI6InN1LVVzMWVuNXBNM3V6UHFlNTF5Ymc0ZnBCV3A3cjRfZG81TFZkX3dQc0ZIMFM1U1p6eFdIMDlmaS1Bb2NlTzFZc1Nnc3VVZXo1Z1YiLCJ2IjoxLCJhdXRob3IiOiJnMnJBSmRwall2TnlWbDVNRDNIZ2N3d0dQbUtObnRHekUySU40WEtONk5zIn0",
+        "sig": "K_5WU694mfqwIAYOWUhlQxzG5TpOagnP-zj3EabDvf3_6nZh-GN11M2I-vZLEsLC_JrorgwfhGfWQfzaHbvyAg"
+      }
+    },
+    {
+      "id": "V3MDty3Wfim9BfS_FToJdEE1prFbLb1eXZ7p0MRZuhE",
+      "kind": "group.settings",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbIjYwWXNjQjdTSFFnTHFsM2Z1NDVMRC1JVktnRkFrQWpISDNMQTRra0VHQm8iXSwiYm9keSI6eyJlZGl0YWJsZUJ5IjoibWVtYmVycyJ9LCJ0cyI6MTc5MjE2MDgwNDg2NSwiZ3JvdXAiOiJYRVMtWmlXVXgzeWt5TWFxRDNjS0x3Iiwia2luZCI6Imdyb3VwLnNldHRpbmdzIiwiZXBvY2giOiJMc2FlWmZNLUUyRVRwVHNqQ05ZVU8xWmItQkdPTW9SVGZ4THJPSEd6VzA0IiwiY3QiOiJUdFpHYjB5QXNMN2QtazR2aWYycFZQdXVZaUFWcWtjM05kMFRwWk1jVVZWb3FFVlFhUFZuSDBxclpOSUMiLCJ2IjoxLCJhdXRob3IiOiI1eGkwTmJBdmxaR24zSmcyQXg0Wk5JQmhORUd0anNBcXRBTmxRRlpJQ2VnIn0",
+        "sig": "JhbRar0QymZW-a6ri57VQzcZv2yqk-6dOEuo_CwAYw3Q0BAZZmzgB-TFNMW0tzE2EyHxK6fSabBn9dknIgf3Dg"
+      }
+    },
+    {
+      "id": "_63tUhYnw1HUCbBphiXYptmRNrl1VF-CrPIHj-3dISE",
+      "kind": "group.settings",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbIlYzTUR0eTNXZmltOUJmU19GVG9KZEVFMXByRmJMYjFlWFo3cDBNUlp1aEUiXSwiYm9keSI6eyJob3VycyI6WzEsMl19LCJ0cyI6MTc5MjE2MDgwNDg3MCwiZ3JvdXAiOiJYRVMtWmlXVXgzeWt5TWFxRDNjS0x3Iiwia2luZCI6Imdyb3VwLnNldHRpbmdzIiwiZXBvY2giOiJMc2FlWmZNLUUyRVRwVHNqQ05ZVU8xWmItQkdPTW9SVGZ4THJPSEd6VzA0IiwiY3QiOiJyZWZQWmRYel9iaWoyMl96TjVMUnRjQWFCbEJvVk5RRjdNM2wzeUJWUEJUeXNQVjJtX1I2ZmZPZjl4NEU3WDNUanRVckgtWmxoaDNfUFhwTmZXSGkiLCJ2IjoxLCJhdXRob3IiOiJnMnJBSmRwall2TnlWbDVNRDNIZ2N3d0dQbUtObnRHekUySU40WEtONk5zIn0",
+        "sig": "ianz0JEWKh3i1tFKL198Rl3GzfZn57mSs7QEJBwWS3QvW1vdDdoznbpB1yebhJo_SexhmyxE5tisFgYPdDFjCA"
+      }
+    },
+    {
+      "id": "p9U-cQfs7T9xxmBSZvy4b10PAXhYSJejDxtmeloSGHg",
+      "kind": "group.settings",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbIlYzTUR0eTNXZmltOUJmU19GVG9KZEVFMXByRmJMYjFlWFo3cDBNUlp1aEUiXSwiYm9keSI6e30sInRzIjoxNzkyMTYwODA0ODc1LCJncm91cCI6IlhFUy1aaVdVeDN5a3lNYXFEM2NLTHciLCJraW5kIjoiZ3JvdXAuc2V0dGluZ3MiLCJlcG9jaCI6IkxzYWVaZk0tRTJFVHBUc2pDTllVTzFaYi1CR09Nb1JUZnhMck9IR3pXMDQiLCJjdCI6Imw1c1c3MGFrdmJSZlJrUnY0WHhDQTBVTkpORFlwem50anNMTjVwY3lhN0MxeWdpUkszUkI1UFcwS3pyWWpVU2ZWamY2UERLZ2RrT2luQVRITVBROUNFRUp1Q3lRR3UtRVY2MUNyYnpwQVBCZGRKNWNmLUtDR0VTWmEwd2ZVOHBicVBVTmFmVFlscndYd2VOREgyc2FmQ2N0U2ZiSGNPMmZuTEI4M1gwV2RUTlkiLCJ2IjoxLCJhdXRob3IiOiJnMnJBSmRwall2TnlWbDVNRDNIZ2N3d0dQbUtObnRHekUySU40WEtONk5zIn0",
+        "sig": "ebpL-BjqW7VjTXXQ52UGvPSgM-jqwBsMktueWJj87hp5luXBaP8VrAYyt0kyKyN_X7kONMjgdaQEipoE71hSCg"
+      }
+    }
+  ],
+  "contents": {
+    "p9U-cQfs7T9xxmBSZvy4b10PAXhYSJejDxtmeloSGHg": {
+      "name": "新部室",
+      "icon": "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=="
+    }
+  },
+  "expected": {
+    "admin": "5xi0NbAvlZGn3Jg2Ax4ZNIBhNEGtjsAqtANlQFZICeg",
+    "members": [
+      "5xi0NbAvlZGn3Jg2Ax4ZNIBhNEGtjsAqtANlQFZICeg",
+      "g2rAJdpjYvNyVl5MD3HgcwwGPmKNntGzE2IN4XKN6Ns"
+    ],
+    "applied": [
+      "60YscB7SHQgLql3fu45LD-IVKgFAkAjHH3LA4kkEGBo",
+      "LsaeZfM-E2ETpTsjCNYUO1Zb-BGOMoRTfxLrOHGzW04",
+      "Rumb0niI2nBR_ton_66MFpnrCP5Gb4nh_qYJl736F_Q",
+      "V3MDty3Wfim9BfS_FToJdEE1prFbLb1eXZ7p0MRZuhE",
+      "aCLQmVYKMlNUtfBT05gA1VLMLLKERhzOJeO-Uns1dsk",
+      "p9U-cQfs7T9xxmBSZvy4b10PAXhYSJejDxtmeloSGHg"
+    ],
+    "rejected": [
+      "_63tUhYnw1HUCbBphiXYptmRNrl1VF-CrPIHj-3dISE",
+      "dw__DHZ5Ixip5WNfuLo3qotkV5BI15T1kP90Mf0RVTQ"
+    ],
+    "editableBy": "members",
+    "settingsRecord": "p9U-cQfs7T9xxmBSZvy4b10PAXhYSJejDxtmeloSGHg",
+    "hours": [
+      8,
+      23
+    ]
+  }
+}

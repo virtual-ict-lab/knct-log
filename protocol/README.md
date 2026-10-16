@@ -41,7 +41,7 @@ TypeScript の参照実装は `packages/core`、API の適合テストは `packa
 
 ```json
 { "v": 1, "account": "<Ed25519 公開鍵>", "ts": 1800000000000,
-  "bundle": "<AES-GCM(AMK, {v, signPkcs8, kxPkcs8, signPub, kxPub, name})>",
+  "bundle": "<AES-GCM(AMK, {v, signPkcs8, kxPkcs8, signPub, kxPub, name, icon?})>",
   "unlocks": [ { "id": "<credential ID>", "kind": "passkey", "box": "<AES-GCM(KEK, AMK)>" },
                { "id": "<乱数>", "kind": "link", "exp": 1800000600000, "box": "…" } ] }
 ```
@@ -88,7 +88,7 @@ payload（ヘッダー）のフィールド:
 | kind | body | ct | 誰が出せるか | deps |
 |---|---|---|---|---|
 | `group.create` | `kx`（作成者の X25519） | — | 誰でも | なし |
-| `group.settings` | `hours?: [開始, 終了)`, `utcOffsetMin?` | `{name}` | 管理者 | 制御 heads |
+| `group.settings` | `hours?: [開始, 終了)`, `utcOffsetMin?`, `editableBy?: "admin"｜"members"` | `{name, icon?}` | 管理者。`editableBy` が `"members"` のときは他のメンバーも、ただし body が空（名前とアイコンだけ）のものに限る | 制御 heads |
 | `invite` | `th = sha256(token)`, `exp?` | — | メンバー | 制御 heads |
 | `invite.revoke` | `invite` | — | 管理者・招待した本人 | 制御 heads |
 | `member.join` | `kx`, `invite`, `token` | — | token を持つ人 | `[invite]` を含む |
@@ -96,13 +96,16 @@ payload（ヘッダー）のフィールド:
 | `admin.transfer` | `to` | — | 管理者 | 制御 heads |
 | `key.rotate` | `parent`（旧 epoch） | — | メンバー | 制御 heads + `parent` |
 | `key.wrap` | `to`, `enc`, `ct`（HPKE） | — | メンバー | `[epoch, 対象の参加レコード]` |
-| `profile` | — | `{name}` | メンバー | `[epoch]` |
+| `profile` | — | `{name, icon?}` | メンバー | `[epoch]` |
 | `post` | — | `{ck, mime, durationMs, takenAt, text?}` | メンバー | `[epoch]` |
 | `reaction` | `to`（投稿者） | `{ref, emoji}` | メンバー | `[epoch]` |
 | `reply` | `to`（投稿者） | `{ref, text}` | メンバー | `[epoch]` |
 
 **他人を削除する操作は存在しない。** 制御レコード（上 8 種）はグループ状態を決め、無期限に保持する。`post` は 7 日で消える。
 
+- **名前とアイコン**：グループの名前・アイコンは `group.settings` の `ct`、メンバー自身の表示名・アイコンは `profile` の `ct` に入れる。`icon` は小さな画像の data URL（`data:image/(webp|jpeg|png);base64,...`、全体で 9000 文字まで。目安は 128×128 の WebP で 6KB 以下）。blob は 7 日で消えるので使わず、レコードに埋め込む（payload 16KiB の上限に収める）。
+- **誰が名前・アイコンを変えられるか**：既定は管理者のみ。管理者が `group.settings` の `body.editableBy` を `"members"` にすると、メンバーなら誰でも `body` が空の `group.settings`（名前とアイコンだけ）を出せる。`hours` / `utcOffsetMin` / `editableBy` を含むレコードは常に管理者のみ（`editableBy` を変えられるのは管理者だけ）。権限はレコードを導出順に適用する時点の `editableBy` で判定するので、設定の切り替えと同時に出されたレコードも到着順に依らず同じ結果になる。最後に適用された `group.settings` の `ct` が現在の名前・アイコン。旧実装は管理者以外の `group.settings` を無視するので、`editableBy` は旧クライアントには効かない（読む側は影響を受けない）。
+- 自分のアイコンは名前と同じくアカウント文書の bundle（`AccountSecret.icon?`）に入れて端末間で引き継ぎ、各グループの `profile` として出し直す。bundle の上限は 16384 文字。
 - `post.text` は動画の中央に重ねる文字（40 文字まで）。動画には焼き込まず、表示時に重ね、Vlog を作るときだけ焼き込む。
 - `reaction` / `reply` の `exp` は対象の投稿と同じ（投稿と一緒に消える）。`ref`（対象の投稿 ID）は暗号文の中なので、サーバーにはどの投稿への反応かは分からない。`to` は通知の宛先にだけ使う。
 - `reaction` は作成者ごと・投稿ごとに最新（`(ts, id)` が最大）の 1 つが有効。`emoji` が空文字なら取り消し。`reply.text` は 200 文字まで。
@@ -118,7 +121,7 @@ payload（ヘッダー）のフィールド:
 5. **現 epoch**：ルート（`group.create`）から、`parent` が同じ `key.rotate` のうち ID が最小の子を葉までたどる。
 6. **ローテーション要否**：現 epoch の祖先（deps の推移閉包）に含まれない `member.leave` があれば、残りのメンバーの誰か（管理者は即時、他は 2 分後）が `key.rotate` を出し、残りの全員に `key.wrap` する。同時に複数出ても 5. で 1 つに決まり、他の epoch の鍵も配布済みなので読める。
 7. 現 epoch の `key.wrap` を持たないメンバーがいれば、鍵を持つ端末が wrap する（管理者は即時、他は参加から 2 分後）。新規参加者に渡すのは現 epoch の鍵だけ。
-8. 新しい epoch では各メンバーが `profile` を、管理者が `group.settings` を出し直す（古い鍵を持たない人のため）。
+8. 新しい epoch では各メンバーが `profile` を、管理者が（最後に適用された内容の）`group.settings` を出し直す（古い鍵を持たない人のため）。
 
 `protocol/test-vectors/` のベクタで、ID 計算・署名検証・導出結果を確認できる。
 

@@ -29,6 +29,7 @@ import {
   openRecord,
   randomBytes,
   transferAdmin,
+  updateSettings,
   type VerifiedRecord,
 } from "@knct-log/core";
 
@@ -149,8 +150,25 @@ export function conformance(name: string, target: () => Target) {
       expect(await decryptBlob(opened.ck, await alice.api.downloadBlob(blob.blobId), blob.blobId)).toEqual(video);
       await expect(mallory.api.downloadBlob(blob.blobId)).rejects.toMatchObject({ status: 403 });
 
-      // 管理者の移譲：管理者以外は不可
+      // 名前・アイコンの変更：既定では管理者のみ。管理者が許可するとメンバーも可（hours / editableBy は管理者のみ）
       s = await deriveGroupState(g.group, recs);
+      const icon = "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+      const denied = await updateSettings(bob, s, g.key, { name: "bob", icon });
+      expect((await post(bob.api, g.group, denied))[0]).toMatchObject({ status: "invalid" });
+      const allow = await updateSettings(alice, s, g.key, { name: "procon" }, { editableBy: "members" });
+      expect((await post(alice.api, g.group, allow))[0]!.status).toBe("ok");
+      s = await deriveGroupState(g.group, await allRecords(alice.api, g.group));
+      const renamed = await updateSettings(bob, s, g.key, { name: "新しい名前", icon });
+      expect((await post(bob.api, g.group, renamed))[0]!.status).toBe("ok");
+      const sneaky = await updateSettings(bob, s, g.key, { name: "x" }, { hours: [1, 2] });
+      expect((await post(bob.api, g.group, sneaky))[0]).toMatchObject({ status: "invalid" });
+      const flag = await updateSettings(bob, s, g.key, { name: "x" }, { editableBy: "admin" });
+      expect((await post(bob.api, g.group, flag))[0]).toMatchObject({ status: "invalid" });
+      const mallorySet = await updateSettings(mallory, s, g.key, { name: "x" });
+      expect((await post(mallory.api, g.group, mallorySet))[0]).toMatchObject({ status: "invalid" });
+
+      // 管理者の移譲：管理者以外は不可
+      s = await deriveGroupState(g.group, await allRecords(alice.api, g.group));
       const fake = await transferAdmin(bob, s, carol.signer.pub);
       expect((await post(bob.api, g.group, fake))[0]).toMatchObject({ status: "invalid" });
       const xfer = await transferAdmin(alice, s, bob.signer.pub);
