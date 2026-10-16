@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Bell, Check, Crown, Link, LogOut, X } from "lucide-react";
+import { Bell, Check, Crown, Link, LogOut, Users, X } from "lucide-react";
 import { Screen } from "./Layout.tsx";
-import { Avatar, ErrorNote, IconButton, Sheet, useAction } from "./common.tsx";
+import { Avatar, ErrorNote, IconButton, IconPicker, Sheet, useAction } from "./common.tsx";
 import { go, shortKey, useEngine, useLive } from "./hooks.ts";
 
 export function GroupSettings({ group }: { group: string }) {
@@ -22,7 +22,8 @@ export function GroupSettings({ group }: { group: string }) {
   if (!view) return <Screen title="" back={`/g/${group}`}>{null}</Screen>;
   const others = view.members.filter((m) => !m.isMe);
   const label = (m: (typeof view.members)[number]) => m.name ?? shortKey(m.pk);
-  const dirty = name.trim() !== (view.name ?? "") || hours[0] !== view.state?.settings.hours[0] || hours[1] !== view.state?.settings.hours[1];
+  const hoursDirty = hours[0] !== view.state?.settings.hours[0] || hours[1] !== view.state?.settings.hours[1];
+  const dirty = name.trim() !== (view.name ?? "") || hoursDirty;
 
   async function leave(successor?: string) {
     if (!confirm("退会しますか？")) return;
@@ -35,34 +36,77 @@ export function GroupSettings({ group }: { group: string }) {
     <Screen title={view.name ?? ""} back={`/g/${group}`}>
       <ErrorNote error={error} />
 
-      {view.isAdmin && (
+      {view.canEdit && (
         <>
         <h2 className="section-label">グループ</h2>
         <section className="card">
           <div className="field-row">
-            <Avatar id={group} name={name || view.name} size={40} />
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="グループ名" />
-          </div>
-          <div className="field-row hours-row">
-            <Bell size={20} className="muted" />
-            <span className="row-label">通知の時間帯</span>
-            <span className="hours">
-              <HourSelect value={hours[0]} onChange={(h) => setHours([h, hours[1]])} max={23} label="開始" />
-              <span className="muted">–</span>
-              <HourSelect value={hours[1]} onChange={(h) => setHours([hours[0], h])} min={1} max={24} label="終了" />
-            </span>
-          </div>
-          <div className="row end">
-            <IconButton
-              icon={Check}
-              label="保存"
-              text="保存"
-              variant="primary"
-              disabled={!dirty || !name.trim() || hours[0] >= hours[1]}
-              busy={busy === "save"}
-              onClick={run("save", () => engine.updateGroupSettings(group, { name: name.trim() }, { hours }))}
+            <IconPicker
+              id={group}
+              name={name || view.name}
+              icon={view.icon}
+              size={44}
+              label="グループのアイコンを変える"
+              onSave={(icon) => engine.updateGroupSettings(group, { name: view.name ?? name.trim(), ...(icon ? { icon } : {}) })}
             />
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="グループ名" />
+            {!view.isAdmin && (
+              <IconButton
+                icon={Check}
+                label="保存"
+                variant="primary"
+                disabled={!name.trim() || name.trim() === (view.name ?? "")}
+                busy={busy === "save"}
+                onClick={run("save", () => engine.updateGroupSettings(group, { name: name.trim(), ...(view.icon ? { icon: view.icon } : {}) }))}
+              />
+            )}
           </div>
+          {view.isAdmin && (
+            <>
+              <div className="field-row">
+                <Users size={20} className="muted" />
+                <span className="row-label">メンバーも名前とアイコンを変更できる</span>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={view.state?.settings.editableBy === "members"}
+                    disabled={!view.name || busy === "editable"}
+                    aria-label="メンバーも名前とアイコンを変更できる"
+                    onChange={(e) =>
+                      void run("editable", () =>
+                        engine.updateGroupSettings(group, { name: view.name!, ...(view.icon ? { icon: view.icon } : {}) }, { editableBy: e.target.checked ? "members" : "admin" }),
+                      )()
+                    }
+                  />
+                  <span className="switch-track" />
+                </label>
+              </div>
+              <div className="field-row hours-row">
+                <Bell size={20} className="muted" />
+                <HourSelect value={hours[0]} onChange={(h) => setHours([h, hours[1]])} max={23} label="開始" />
+                <span className="muted">–</span>
+                <HourSelect value={hours[1]} onChange={(h) => setHours([hours[0], h])} min={1} max={24} label="終了" />
+              </div>
+              <div className="row end">
+                <IconButton
+                  icon={Check}
+                  label="保存"
+                  text="保存"
+                  variant="primary"
+                  disabled={!dirty || !name.trim() || hours[0] >= hours[1]}
+                  busy={busy === "save"}
+                  onClick={run("save", () =>
+                    engine.updateGroupSettings(
+                      group,
+                      { name: name.trim(), ...(view.icon ? { icon: view.icon } : {}) },
+                      hoursDirty ? { hours } : {},
+                    ),
+                  )}
+                />
+              </div>
+            </>
+          )}
         </section>
         </>
       )}

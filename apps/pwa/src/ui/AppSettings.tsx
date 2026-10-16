@@ -4,7 +4,7 @@ import type { Endpoint } from "../lib/db.ts";
 import { PasskeyError, passkeySupported, webPasskey } from "../lib/passkey.ts";
 import { currentSubscription, disablePush, enablePush, needsHomeScreen, pushSupported } from "../lib/push.ts";
 import { ConnectionDot, Screen } from "./Layout.tsx";
-import { Avatar, ErrorNote, IconButton, Qr, Sheet, useAction } from "./common.tsx";
+import { ErrorNote, IconButton, IconPicker, Qr, Sheet, useAction } from "./common.tsx";
 import { go, useEngine, useLive } from "./hooks.ts";
 
 export function AppSettings() {
@@ -52,7 +52,14 @@ export function AppSettings() {
       <h2 className="section-label">表示名</h2>
       <section className="card">
         <div className="field-row">
-          <Avatar id={engine.me ?? ""} name={name || engine.name} size={44} />
+          <IconPicker
+            id={engine.me ?? ""}
+            name={name || engine.name}
+            icon={engine.icon}
+            size={44}
+            label="アイコンを変える"
+            onSave={(icon) => engine.updateMe({ icon }).then(() => engine.sync())}
+          />
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} aria-label="表示名" />
           <IconButton
             icon={Check}

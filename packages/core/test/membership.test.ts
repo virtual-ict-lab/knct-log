@@ -10,6 +10,10 @@ import {
   openContent,
   rotateKey,
   transferAdmin,
+  updateSettings,
+  setProfile,
+  isIcon,
+  MAX_ICON_CHARS,
   decryptBlob,
   type PostContent,
 } from "../src/ops.ts";
@@ -180,5 +184,72 @@ describe("membership", () => {
     const env = g.records[0]!.envelope;
     const bad = { ...env, payload: env.payload.slice(0, -2) + (env.payload.endsWith("A") ? "BB" : "AA") };
     await expect(openRecord(bad)).rejects.toThrow();
+  });
+
+  describe("name and icon permission", () => {
+    const ICON = "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+
+    it("rejects a member's group.settings by default and accepts it once the admin allows members", async () => {
+      const { actors, admin, g, log, state } = await setup(2);
+      const bob = actors[1]!;
+      const before = await updateSettings(bob, await state(), g.key, { name: "x" });
+      expect((await deriveGroupState(g.group, [...log, before])).rejected.get(before.id)).toBe("only admin can change settings");
+
+      const open = await updateSettings(admin, await state(), g.key, { name: "procon" }, { editableBy: "members" });
+      log.push(open);
+      expect((await state()).settings.editableBy).toBe("members");
+      const ok = await updateSettings(bob, await state(), g.key, { name: "新しい名前", icon: ICON });
+      log.push(ok);
+      const s = await state();
+      expect(s.applied.has(ok.id)).toBe(true);
+      expect(s.settings.recordId).toBe(ok.id);
+      expect(s.settings.hours).toEqual([8, 23]);
+      expect(await openContent(g.key, ok.header)).toEqual({ name: "新しい名前", icon: ICON });
+    });
+
+    it("keeps hours and editableBy admin-only and ignores outsiders", async () => {
+      const { actors, admin, g, log, state } = await setup(2);
+      const bob = actors[1]!;
+      log.push(await updateSettings(admin, await state(), g.key, { name: "p" }, { editableBy: "members" }));
+      const hours = await updateSettings(bob, await state(), g.key, { name: "p" }, { hours: [1, 2] });
+      const flag = await updateSettings(bob, await state(), g.key, { name: "p" }, { editableBy: "admin" });
+      const outsider = await updateSettings(await newActor(), await state(), g.key, { name: "p" });
+      const s = await deriveGroupState(g.group, [...log, hours, flag, outsider]);
+      for (const r of [hours, flag, outsider]) expect(s.rejected.has(r.id)).toBe(true);
+      expect(s.settings.editableBy).toBe("members");
+    });
+
+    it("stops members again after the admin reverts, regardless of arrival order", async () => {
+      const { actors, admin, g, log, state } = await setup(2);
+      const bob = actors[1]!;
+      const on = await updateSettings(admin, await state(), g.key, { name: "p" }, { editableBy: "members" });
+      log.push(on);
+      const edit = await updateSettings(bob, await state(), g.key, { name: "b" });
+      log.push(edit);
+      const off = await updateSettings(admin, await state(), g.key, { name: "p" }, { editableBy: "admin" });
+      log.push(off);
+      const late = await updateSettings(bob, await state(), g.key, { name: "late" });
+      log.push(late);
+      const want = summary(await state());
+      expect(want.rejected).toEqual([late.id]);
+      for (let seed = 1; seed <= 20; seed++) {
+        const s = await deriveGroupState(g.group, shuffle(log, seed));
+        expect(summary(s)).toEqual(want);
+        expect(s.settings.recordId).toBe(off.id);
+      }
+    });
+
+    it("validates icons", () => {
+      expect(isIcon(ICON)).toBe(true);
+      expect(isIcon("javascript:alert(1)")).toBe(false);
+      expect(isIcon("data:image/svg+xml;base64,AAAA")).toBe(false);
+      expect(isIcon(`data:image/png;base64,${"A".repeat(MAX_ICON_CHARS)}`)).toBe(false);
+    });
+
+    it("carries an icon in profile content", async () => {
+      const { admin, g, state } = await setup(1);
+      const p = await setProfile(admin, await state(), g.key, { name: "a", icon: ICON });
+      expect(await openContent(g.key, p.header)).toEqual({ name: "a", icon: ICON });
+    });
   });
 });

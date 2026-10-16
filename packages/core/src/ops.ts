@@ -9,12 +9,23 @@ export interface Actor {
   kxPub: string;
 }
 
+/** アイコン画像は data URL（"data:image/webp;base64,..."）。レコードの上限に収めるため小さく保つ */
+export const MAX_ICON_CHARS = 9000;
+const ICON_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+
+/** 表示してよいアイコンか（形式と大きさだけを見る） */
+export function isIcon(v: unknown): v is string {
+  return typeof v === "string" && v.length <= MAX_ICON_CHARS && ICON_RE.test(v);
+}
+
 export interface GroupMeta {
   name: string;
+  icon?: string;
 }
 
 export interface Profile {
   name: string;
+  icon?: string;
 }
 
 export interface PostContent {
@@ -77,8 +88,9 @@ export async function updateSettings(
   s: GroupState,
   key: Uint8Array<ArrayBuffer>,
   meta: GroupMeta,
-  pub: { hours?: [number, number]; utcOffsetMin?: number } = {},
+  pub: { hours?: [number, number]; utcOffsetMin?: number; editableBy?: "admin" | "members" } = {},
 ) {
+  if (meta.icon !== undefined && !isIcon(meta.icon)) throw new Error("invalid icon");
   return sealedRecord(actor, s.group, "group.settings", s.currentEpoch!, key, meta, { deps: s.heads, body: pub });
 }
 
@@ -157,6 +169,7 @@ export async function sealedRecord(
 }
 
 export async function setProfile(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, profile: Profile) {
+  if (profile.icon !== undefined && !isIcon(profile.icon)) throw new Error("invalid icon");
   return sealedRecord(actor, s.group, "profile", s.currentEpoch!, key, profile);
 }
 

@@ -79,7 +79,8 @@ const BODY: Record<Kind, { body: BodyCheck; ct: boolean; epoch: boolean }> = {
   "group.settings": {
     body: (b) =>
       opt(b.hours, (h) => Array.isArray(h) && h.length === 2 && h.every(isHour) && h[0] < h[1]) &&
-      opt(b.utcOffsetMin, (o) => Number.isInteger(o) && Math.abs(o as number) <= 14 * 60),
+      opt(b.utcOffsetMin, (o) => Number.isInteger(o) && Math.abs(o as number) <= 14 * 60) &&
+      opt(b.editableBy, (e) => e === "admin" || e === "members"),
     ct: true,
     epoch: true,
   },
