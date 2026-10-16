@@ -1,0 +1,71 @@
+{
+  "description": "アカウント文書と、反応・返信・文字付き投稿の例。各実装は (1) 署名を検証し、(2) prf / link の 32 バイトから HKDF で KEK を導出して unlock を開き AMK を得て、(3) bundle を開いて PKCS#8 の秘密鍵を取り込み、公開鍵が account と一致することを確かめる。レコードはグループ鍵 groupKey で ct を開き contents と一致することを確かめる。暗号文は乱数を含むので値の一致は確認しない。",
+  "account": {
+    "envelope": {
+      "payload": "eyJ2IjoxLCJhY2NvdW50IjoiWl9hMjUzanRfM3I0V3FoYmZRaTBuYjBZcFlod2lLa3RWcU1kSDJYN0dWWSIsInRzIjoxODAwMDAwMDAwMDAwLCJidW5kbGUiOiI2UlBNVzVodTl5S2cxckhHdFJBZVNmdzNJMy1QeVRHTXZLRFZoNVVadEVzcDNjZUhaekNWVTBKbmNVcC1vMkM5bVZVQzRMX211VzUxUnNpazlPRG43RUhuR0RnVVZDcEp3RXR0alRfbXFESlhqMlF3RHBQZ3p4SHpUNDVRcHlPeTQyUDdlOGthb1BMaTllanB6M2NUR3FPUnQ2RlQxUVFUcDVtTXl4M1dnTldPdzU1RWQ3VEJRV1l2VEJzTWx0dnRvdV8yOUJucHhsbThfUDRSRXBjVXFUbXNvUFRNTUxrT0lIS0ZTZHlWdnRqZTU5OFd2MlRmUmR0N3hVYmVmcGVYamNpZXBNMTV0Ukc1dXEyWmxEa210dE1QdWFfd0xfWDhKeW5GZzRHR0JMXzl2cGp3dzRYMFVJLW1kZzd1ZXVYb19MdTNXT012VG53N1BoeXYxcVVvQnJvcDBGNEJiaTFyeEhuYTlueUVHeUlpLTUxYndJbmxIVk1UYW9QT0VZSURkZHNkTm1tMFBrZENvdks5VVltLW80RzF4a3RuZDQxYzM3cVJrNHBBQjVnIiwidW5sb2NrcyI6W3siaWQiOiJZM0psWkMweCIsImtpbmQiOiJwYXNza2V5IiwiYm94IjoiN3QzMGdiLWxxNm94Y21DRW4wdmF5bnN0RS1qMGdjS2hYQlBzb3FEYkxTLXNKd2oxcURHVkMwUVBuRDFub3lLaXFROEMyOTZ3WlRuWXdjZWsifSx7ImlkIjoiYkdsdWF5MHgiLCJraW5kIjoibGluayIsImV4cCI6MTgwMDAwMDYwMDAwMCwiYm94IjoiTS1wQlc3LTdTdEViUFE4SWRkbi12aWVFNFg5VXJfS0NPV2lCNU16dmpFVk1ZUWpSN3gxZXVOSTFTcHdfX1R1eTYxcnhZbjRFMi1ISFhDSWMifV19",
+      "sig": "4_kNB7T6cQDGDEwIilylXZOLCXE6udv0TVlKa6Xfgugd0KxF46avvLY4xYIoqwKWWvQlhQug1smiE7e2VsfEAg"
+    },
+    "prf": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM",
+    "linkSecret": "REREREREREREREREREREREREREREREREREREREREREQ",
+    "expected": {
+      "amk": "oaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaE",
+      "kekPasskey": "5LpjDViKL7Ir6Vg7wnxQx-2yvsINML7p8GwrreylT_A",
+      "kekLink": "qmIzSAUTnZU3vA5QzX2fOxeqbwDxt-Qkibve64pGmUg",
+      "name": "ベクタ",
+      "signPub": "Z_a253jt_3r4WqhbfQi0nb0YpYhwiKktVqMdH2X7GVY",
+      "kxPub": "r4VvYN_tGflDbgrJmz-yATODFiEdhqR023s3aPtCc2s"
+    }
+  },
+  "groupKey": "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU",
+  "records": [
+    {
+      "id": "pDsDwqICdnnbYBQ_1wu_puHmXhkc9rUYVOPr8JVrhcQ",
+      "kind": "group.create",
+      "envelope": {
+        "payload": "eyJncm91cCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJraW5kIjoiZ3JvdXAuY3JlYXRlIiwiZGVwcyI6W10sImJvZHkiOnsia3giOiJyNFZ2WU5fdEdmbERiZ3JKbXoteUFUT0RGaUVkaHFSMDIzczNhUHRDYzJzIn0sInYiOjEsImF1dGhvciI6IlpfYTI1M2p0XzNyNFdxaGJmUWkwbmIwWXBZaHdpS2t0VnFNZEgyWDdHVlkiLCJ0cyI6MTc5MjExMjU4MzE2M30",
+        "sig": "a63lfszha83S5n0JvCIUZW9HbY7Pun_AN7qw945cy84nlwQmRuhVoitCNT7oSiLdygwXsI1W8Nv_zNCF9AimDg"
+      }
+    },
+    {
+      "id": "ilLcuUjxwRnHgGw_wCV2Mmf-wMd9wHUBW7W26xPYxCY",
+      "kind": "post",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbInBEc0R3cUlDZG5uYllCUV8xd3VfcHVIbVhoa2M5clVZVk9QcjhKVnJoY1EiXSwidHMiOjE3OTIxMTI1ODMxNjQsImJsb2JzIjpbIlptWm1abVptWm1abVptWm1abVptWm1abVptWm1abVptWm1abVptWm1abVkiXSwiZXhwIjoxNzkyNzE3MzgzMTY0LCJncm91cCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJraW5kIjoicG9zdCIsImVwb2NoIjoicERzRHdxSUNkbm5iWUJRXzF3dV9wdUhtWGhrYzlyVVlWT1ByOEpWcmhjUSIsImN0IjoiOHNMb1RWQUNRSlBxQkFVcjBBWjdKOU53dkhmS1Z1SXdCMXVJT0ZxaVk5NjlvWE02YzA3VE5ycUE0djJRLXo3RkQxRFZIaEJfR3drT2xDcUJvMVVudEhycXBEUUV1cFRQWFpsVXBDYUhlWFotdkxFcm9pQjJxUENCWFZTejhpTGFhdXh2cmY4SjRJREk0N2pobjJSMUwzb3FUakYxcW52b3V2NXg0aXFZT0R0NTdTYnlwTEtudU9ib0c4d2VIdFlBNWRrVjJHeDYzSk11bm5LeTdFdmxLN1UzR0EiLCJ2IjoxLCJhdXRob3IiOiJaX2EyNTNqdF8zcjRXcWhiZlFpMG5iMFlwWWh3aUtrdFZxTWRIMlg3R1ZZIn0",
+        "sig": "WCyPK9k3wAxzoxXs6pri7on7GSqqkYkWlDshSz3nY-ZrO44RJ9w8jMTzZI5eUP37YR_nr_zQEwetLZKziy5kAg"
+      }
+    },
+    {
+      "id": "8xfHFpaee83lgsVehn9qOWNXlTt4XdZje_VfVGs7Kxk",
+      "kind": "reaction",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbInBEc0R3cUlDZG5uYllCUV8xd3VfcHVIbVhoa2M5clVZVk9QcjhKVnJoY1EiXSwiZXhwIjoxNzkyNzE3MzgzMTY0LCJib2R5Ijp7InRvIjoiWl9hMjUzanRfM3I0V3FoYmZRaTBuYjBZcFlod2lLa3RWcU1kSDJYN0dWWSJ9LCJ0cyI6MTc5MjExMjU4MzE2NCwiZ3JvdXAiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIiwia2luZCI6InJlYWN0aW9uIiwiZXBvY2giOiJwRHNEd3FJQ2RubmJZQlFfMXd1X3B1SG1YaGtjOXJVWVZPUHI4SlZyaGNRIiwiY3QiOiI4Nm9tSUE0WUFOc3ZLVWZsZnRmcF9TaXVzSzA1RGFacVQ4aVF5SHhid3BGY0NZYUQxOV9lT1BEOEZhZHp4U1RjNEtXcnlNZjRvUVpYLXZtRHp0TjNqbHRjdzl3Ul9sUHNnbnUtaUJGdkpaeDdNZ0JHR2p1ckxMRnh4Rk5xaVlucCIsInYiOjEsImF1dGhvciI6IlpfYTI1M2p0XzNyNFdxaGJmUWkwbmIwWXBZaHdpS2t0VnFNZEgyWDdHVlkifQ",
+        "sig": "5odNXI-JBG7vSnE4-r_b1bK3OtYPCjyiSxSFkdlcGaiPGp7qYqXuj-J1Jiv5gCVEN_kD_b2yYnDnKbMXPSD1Aw"
+      }
+    },
+    {
+      "id": "R9gQVxR0Px_fcvoKzogrXHXlg426NFYA5TWv7CsKJeU",
+      "kind": "reply",
+      "envelope": {
+        "payload": "eyJkZXBzIjpbInBEc0R3cUlDZG5uYllCUV8xd3VfcHVIbVhoa2M5clVZVk9QcjhKVnJoY1EiXSwiZXhwIjoxNzkyNzE3MzgzMTY0LCJib2R5Ijp7InRvIjoiWl9hMjUzanRfM3I0V3FoYmZRaTBuYjBZcFlod2lLa3RWcU1kSDJYN0dWWSJ9LCJ0cyI6MTc5MjExMjU4MzE2NCwiZ3JvdXAiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIiwia2luZCI6InJlcGx5IiwiZXBvY2giOiJwRHNEd3FJQ2RubmJZQlFfMXd1X3B1SG1YaGtjOXJVWVZPUHI4SlZyaGNRIiwiY3QiOiJzSnV6MFp1bHpvd2lCNTdJbWxRNVFmRzlMRVVoSjNPLWdTS2JPLUhIaG9SVnl4YXJwa3BTNjByZmVsQmRfZWJxRkUxV042RV9IYndJdFNNOUdwTkI4UHc2TWVJS3hYallCOUN5SHJxS3VoOXRLY1FsQi15OG1mN3lqcE14elRwUFRLVDY5ZyIsInYiOjEsImF1dGhvciI6IlpfYTI1M2p0XzNyNFdxaGJmUWkwbmIwWXBZaHdpS2t0VnFNZEgyWDdHVlkifQ",
+        "sig": "nl5yWwg2_uPDz2c_lUHCEyZnWNEam4zn85ETeoLia5zU1gx6bwAJ4cFqtC5HULBHqPwGbdemUReBv4gIYEbBCA"
+      }
+    }
+  ],
+  "contents": {
+    "ilLcuUjxwRnHgGw_wCV2Mmf-wMd9wHUBW7W26xPYxCY": {
+      "ck": "d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3c",
+      "mime": "video/mp4",
+      "durationMs": 3000,
+      "takenAt": 1800000000000,
+      "text": "部室なう"
+    },
+    "8xfHFpaee83lgsVehn9qOWNXlTt4XdZje_VfVGs7Kxk": {
+      "ref": "ilLcuUjxwRnHgGw_wCV2Mmf-wMd9wHUBW7W26xPYxCY",
+      "emoji": "🔥"
+    },
+    "R9gQVxR0Px_fcvoKzogrXHXlg426NFYA5TWv7CsKJeU": {
+      "ref": "ilLcuUjxwRnHgGw_wCV2Mmf-wMd9wHUBW7W26xPYxCY",
+      "text": "いいね"
+    }
+  }
+}

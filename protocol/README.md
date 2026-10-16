@@ -7,6 +7,7 @@ TypeScript の参照実装は `packages/core`、API の適合テストは `packa
 
 - **E2E 暗号化は端末で行う。** サーバーは「署名の検証・暗号文の保管と配布・Push」だけを担当し、動画・名前・撮影時刻は読めない。
 - **データはすべて、クライアントが署名した不変レコード。** ID は内容ハッシュなので、複数サーバーが別々に受け付けても和集合で合流できる。
+- **アカウント = 端末間で共有する鍵。** グループのメンバーはアカウントの公開鍵で表す。鍵はパスキー（PRF）で暗号化してサーバーに置き、同じパスキーがあればどの端末でも取り出せる。
 - **サーバーは対等なピア。** 学内サーバーと Cloudflare のどちらも正本ではなく、単独で書き込みを受け付ける。同期は学内側からの外向き通信だけで行う。
 
 ## エンコーディング
@@ -19,14 +20,43 @@ TypeScript の参照実装は `packages/core`、API の適合テストは `packa
 
 | 用途 | 方式 |
 |---|---|
-| 端末の署名鍵 | Ed25519（raw 公開鍵 32B） |
-| 端末の鍵共有鍵 | X25519（raw 公開鍵 32B） |
+| アカウントの署名鍵 | Ed25519（raw 公開鍵 32B） |
+| アカウントの鍵共有鍵 | X25519（raw 公開鍵 32B） |
+| アカウント鍵の保管 | bundle = AES-256-GCM(AMK, JSON)、AAD = `knct-log/v1/account/<account>/bundle`。AMK はアカウントごとの乱数 32B |
+| AMK の保管 | unlock.box = AES-256-GCM(KEK, AMK)、AAD = `knct-log/v1/account/<account>/unlock/<unlock id>` |
+| KEK | HKDF-SHA256(ikm, salt = 空, info = `knct-log/v1/unlock/<passkey|link>`) → 32B。ikm はパスキーの PRF 出力、またはリンクの乱数 32B |
+| パスキーの PRF | WebAuthn PRF 拡張（CTAP の hmac-secret）。salt = UTF-8 `knct-log/v1/prf`（全アカウント共通） |
 | グループ鍵の配布 | HPKE RFC 9180 base mode, `DHKEM(X25519, HKDF-SHA256)` / `HKDF-SHA256` / `AES-256-GCM`, info = `knct-log/v1/key.wrap/<group>/<epoch>` |
 | レコードの暗号文 `ct` | AES-256-GCM（鍵 = epoch のグループ鍵 32B）。出力 = `nonce(12) ‖ ciphertext ‖ tag`。AAD = `knct-log/v1/<group>/<kind>/<epoch>/<author>` |
 | 動画 blob | AES-256-GCM（鍵 = クリップごとの乱数 `ck` 32B）、AAD = `knct-log/v1/blob`。blob ID = `sha256(暗号文)` |
 | 認証 | Ed25519 で `knct-log/v1/auth:<challenge>` に署名 |
 
-秘密鍵は端末から出さない（WebCrypto の non-extractable / Android Keystore）。1 端末 = 1 メンバー。
+端末に取り込んだ秘密鍵は non-extractable（WebCrypto / Android Keystore）にする。取り出せるのは、AMK を持つ端末が bundle を開いたときだけ。
+
+## アカウント
+
+1 人 = 1 アカウント = Ed25519 + X25519 の鍵ペア 1 組。複数の端末が同じ鍵を使うので、グループの規則（メンバー・鍵の wrap・投稿制限）は端末の数に関係なく 1 人として扱われる。
+
+**アカウント文書**（`{payload, sig}` 形式、アカウントの Ed25519 で署名。payload は 32KiB まで）:
+
+```json
+{ "v": 1, "account": "<Ed25519 公開鍵>", "ts": 1800000000000,
+  "bundle": "<AES-GCM(AMK, {v, signPkcs8, kxPkcs8, signPub, kxPub, name})>",
+  "unlocks": [ { "id": "<credential ID>", "kind": "passkey", "box": "<AES-GCM(KEK, AMK)>" },
+               { "id": "<乱数>", "kind": "link", "exp": 1800000600000, "box": "…" } ] }
+```
+
+- `signPkcs8` / `kxPkcs8` は PKCS#8 DER（base64url）。`name` は表示名（各グループの `profile` の元）。
+- unlocks は 16 個まで。`link` は 10 分で期限切れ（使ったら消す）。
+- サーバーは `ts` が新しいものだけを受け付ける（LWW）。署名者 = `account` であることを確認する。中身は暗号文なので、取得に認証は要らない。
+
+**作成**：鍵ペアと AMK を作り、パスキーを登録する（`user.id` = アカウントの公開鍵 32B、resident key 必須、PRF を評価）。PRF 出力から KEK を導出して AMK を包み、文書を公開する。パスキーを使えない端末では unlock なしで作れる（その端末だけで使える）。
+
+**パスキーでログイン**：discoverable な `navigator.credentials.get` で PRF を評価する。返ってきた `userHandle` がアカウントの公開鍵なので、どのサーバーからでも文書を取得し、`credential ID` が一致する unlock を開く。パスキーが Google パスワードマネージャーや iCloud キーチェーンで同期されていれば、新しい端末でもそのままログインできる。RP ID は PWA の配信元と学内サーバーで共通の親ドメインにする（`VITE_RP_ID`）。
+
+**QR で引き継ぎ**：既存の端末が乱数 32B のリンク用 unlock を追加して公開し、`<app>/#/link?a=<account>&u=<unlock id>&k=<乱数>` を QR で表示する（フラグメントなのでサーバーには送られない）。新しい端末はこれを読んで文書を開き、使った unlock を消す。
+
+**変更**（名前・パスキーの追加）：サーバーの最新の文書に変更を当て、`ts` を進めて署名し直す。409 なら取り直してやり直す。各端末は同期のたびに文書を取得し、他の端末での変更を取り込む。
 
 ## レコード
 
@@ -67,9 +97,15 @@ payload（ヘッダー）のフィールド:
 | `key.rotate` | `parent`（旧 epoch） | — | メンバー | 制御 heads + `parent` |
 | `key.wrap` | `to`, `enc`, `ct`（HPKE） | — | メンバー | `[epoch, 対象の参加レコード]` |
 | `profile` | — | `{name}` | メンバー | `[epoch]` |
-| `post` | — | `{ck, mime, durationMs, takenAt}` | メンバー | `[epoch]` |
+| `post` | — | `{ck, mime, durationMs, takenAt, text?}` | メンバー | `[epoch]` |
+| `reaction` | `to`（投稿者） | `{ref, emoji}` | メンバー | `[epoch]` |
+| `reply` | `to`（投稿者） | `{ref, text}` | メンバー | `[epoch]` |
 
 **他人を削除する操作は存在しない。** 制御レコード（上 8 種）はグループ状態を決め、無期限に保持する。`post` は 7 日で消える。
+
+- `post.text` は動画の中央に重ねる文字（40 文字まで）。動画には焼き込まず、表示時に重ね、Vlog を作るときだけ焼き込む。
+- `reaction` / `reply` の `exp` は対象の投稿と同じ（投稿と一緒に消える）。`ref`（対象の投稿 ID）は暗号文の中なので、サーバーにはどの投稿への反応かは分からない。`to` は通知の宛先にだけ使う。
+- `reaction` は作成者ごと・投稿ごとに最新（`(ts, id)` が最大）の 1 つが有効。`emoji` が空文字なら取り消し。`reply.text` は 200 文字まで。
 
 ## グループ状態の導出
 
@@ -102,7 +138,9 @@ payload（ヘッダー）のフィールド:
 | POST ★ | `/v1/blobs/download-url` | `{id}` → `{url}` |
 | PUT/GET | `/v1/blobs/raw/:id?…` | 署名付き URL（サーバーが発行したもの）。R2 の presigned URL の場合もある |
 | POST ★ | `/v1/push/subscribe`, `/v1/push/unsubscribe` | Web Push 購読 |
-| ★ピア | `/v1/peer/records`, `/v1/peer/push-subs`, `/v1/peer/push-slots` | ピア間同期（設定されたピア鍵のみ） |
+| GET | `/v1/accounts/:account` | アカウント文書 `{payload, sig}`。なければ 404 |
+| PUT | `/v1/accounts` | アカウント文書を保存。署名不正は 400、`ts` が古いと 409 |
+| ★ピア | `/v1/peer/records`, `/v1/peer/push-subs`, `/v1/peer/push-slots`, `/v1/peer/accounts` | ピア間同期（設定されたピア鍵のみ） |
 
 レコード投入の結果（1 件ごと）:
 
@@ -119,11 +157,11 @@ payload（ヘッダー）のフィールド:
 
 1. `/v1/peer/records?after=` を pull して取り込み、足りない blob を取得する。
 2. 未送信のレコード（`pushed = 0`）を、blob を先に送ってから push する。
-3. Push 購読（`updated_at` の新しい方を採用）と送信済みの毎時スロットを双方向に同期する。
+3. Push 購読（`updated_at` の新しい方を採用）、送信済みの毎時スロット、アカウント文書（`ts` の新しい方を採用、署名はそれぞれのサーバーで検証）を双方向に同期する。
 4. `/v1/health` の `instance` が変わっていたら（CF の DB を作り直したら）、カーソルを捨てて全件を送り直す。
 
 ## 通知
 
 - VAPID 鍵は全ピアで共有する。通知の本文に内容は含めない（`{t:"prompt"}` / `{t:"post", g}`）。
-- 新着通知は、レコードを**クライアントから直接受け取ったピアだけ**が送る。
+- 新着通知は、レコードを**クライアントから直接受け取ったピアだけ**が送る。`reaction` / `reply` は `to` の人にだけ `{t:"reaction"|"reply", g}` を送る。
 - 毎時プロンプトは CF の Cron（毎時 0 分）が送る。学内は毎時 3 分を過ぎてもそのスロットが未送信（同期されていない）なら代わりに送る。

@@ -121,6 +121,14 @@ export async function notifyNewPost(deps: Deps, store: Store, h: Header, _id: st
   await markGone(store, gone);
 }
 
+/** リアクション・返信の通知。投稿者本人にだけ送る（自分の投稿への反応は送らない） */
+export async function notifyReaction(deps: Deps, store: Store, h: Header) {
+  const to = h.body?.to as string;
+  if (to === h.author || !(await store.isMember(h.group, to))) return;
+  const { gone } = await deps.pusher!.send(await subsFor(store, [to]), { t: h.kind, g: h.group });
+  await markGone(store, gone);
+}
+
 export function hourSlot(now: number) {
   return new Date(now).toISOString().slice(0, 13); // YYYY-MM-DDTHH (UTC)
 }

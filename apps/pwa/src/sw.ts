@@ -15,15 +15,19 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 // 通知には中身を含めない（サーバーは内容を知らない）
 self.addEventListener("push", (event) => {
   const data = (event.data?.json() ?? {}) as { t?: string; g?: string };
-  const title = data.t === "prompt" ? "今の1本を撮ろう" : "新しい投稿があります";
-  const body = data.t === "prompt" ? "3秒だけ、いまを残そう。" : "グループに新しいクリップが届きました。";
+  const text: Record<string, [string, string]> = {
+    prompt: ["今の1本を撮ろう", "3秒だけ、いまを残そう。"],
+    reaction: ["リアクションが届きました", "あなたのクリップへの反応です。"],
+    reply: ["返信が届きました", "あなたのクリップへの返信です。"],
+  };
+  const [title, body] = text[data.t ?? ""] ?? ["新しい投稿があります", "グループに新しいクリップが届きました。"];
   event.waitUntil(
     (async () => {
       const clients = await self.clients.matchAll({ type: "window" });
       for (const c of clients) c.postMessage({ type: "sync" });
       await self.registration.showNotification(title, {
         body,
-        tag: data.t === "prompt" ? "prompt" : `post-${data.g ?? ""}`,
+        tag: data.t === "prompt" ? "prompt" : `${data.t ?? "post"}-${data.g ?? ""}`,
         icon: "icon-192.png",
         data: { url: data.t === "prompt" ? "/#/capture" : `/#/g/${data.g ?? ""}` },
       });

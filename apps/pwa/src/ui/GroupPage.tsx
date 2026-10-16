@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Check, Copy, Film, Hourglass, KeyRound, Lock, MessageCircle, Plus, Send, Settings, Share2, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { MAX_REPLY_TEXT } from "@knct-log/core";
 import type { PostView } from "../lib/engine.ts";
 import { Screen } from "./Layout.tsx";
 import { VlogDialog } from "./VlogDialog.tsx";
+import { Avatar, ErrorNote, IconButton, QUICK_EMOJIS, Qr, Sheet, Spinner, useAction, useFlash } from "./common.tsx";
 import { dayKey, formatDay, formatTime, go, useEngine, useLive } from "./hooks.ts";
 
 export function GroupPage({ group }: { group: string }) {
@@ -9,22 +12,18 @@ export function GroupPage({ group }: { group: string }) {
   const posts = useLive((e) => e.posts(group), [group]);
   const posted = useLive((e) => e.postedThisHour(group), [group]);
   const [vlogDay, setVlogDay] = useState<PostView[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   const days = useMemo(() => {
     const m = new Map<string, PostView[]>();
     for (const p of posts ?? []) (m.get(dayKey(p.ts)) ?? m.set(dayKey(p.ts), []).get(dayKey(p.ts))!).push(p);
     return [...m.values()];
   }, [posts]);
+  const open = posts?.find((p) => p.id === openId) ?? null;
 
   if (!view) return <Screen title="" back="/">{null}</Screen>;
-
-  const status = view.joining
-    ? "参加を受け付け中です。サーバーに招待が届くと参加できます。"
-    : !view.isMember
-      ? "このグループのメンバーではありません。"
-      : !view.hasKey
-        ? "グループ鍵の受け取り待ちです。メンバーの誰かがアプリを開くと届きます。"
-        : null;
+  const ready = view.isMember && view.hasKey;
 
   return (
     <Screen
@@ -32,77 +31,258 @@ export function GroupPage({ group }: { group: string }) {
       back="/"
       actions={
         view.isMember && (
-          <button className="icon-btn" aria-label="グループ設定" onClick={() => go(`/g/${group}/settings`)}>
-            ⋯
-          </button>
+          <>
+            {ready && view.members.length < 12 && <IconButton icon={UserPlus} label="招待" onClick={() => setInviting(true)} />}
+            <IconButton icon={Settings} label="グループ設定" onClick={() => go(`/g/${group}/settings`)} />
+          </>
         )
       }
     >
-      {status && <div className="banner">{status}</div>}
-      {view.isMember && view.hasKey && (
-        <button className="btn primary wide" disabled={posted} onClick={() => go(`/capture?g=${group}`)}>
-          {posted ? "この1時間はもう撮りました" : "● 今の1本を撮る"}
-        </button>
-      )}
-      {days.length === 0 && view.hasKey && <p className="empty hint">まだクリップがありません。</p>}
+      {view.joining ? (
+        <Waiting icon={<Hourglass size={36} />} label="参加待ち" />
+      ) : !view.isMember ? (
+        <Waiting icon={<Lock size={36} />} label="メンバーではありません" />
+      ) : !view.hasKey ? (
+        <Waiting icon={<KeyRound size={36} />} label="鍵の受け取り待ち" />
+      ) : null}
+
       {days.map((day) => (
         <section key={dayKey(day[0]!.ts)} className="day">
           <div className="day-head">
             <h2>{formatDay(day[0]!.ts)}</h2>
-            <button className="btn small" onClick={() => setVlogDay(day)} disabled={!day.some((p) => p.content)}>
-              まとめる
-            </button>
+            <IconButton icon={Film} label="まとめる" disabled={!day.some((p) => p.content)} onClick={() => setVlogDay(day)} />
           </div>
           <div className="grid">
             {day.map((p) => (
-              <PostCard key={p.id} post={p} />
+              <ClipCard key={p.id} post={p} onOpen={() => setOpenId(p.id)} />
             ))}
           </div>
         </section>
       ))}
+
+      {ready && (
+        <button className={`fab ${posted ? "done" : ""}`} aria-label={posted ? "この1時間は撮影済み" : "撮影"} title={posted ? "この1時間は撮影済み" : "撮影"} disabled={!!posted} onClick={() => go(`/capture?g=${group}`)}>
+          {posted ? <Check size={28} /> : <Camera size={28} />}
+        </button>
+      )}
       {vlogDay && <VlogDialog posts={vlogDay} onClose={() => setVlogDay(null)} />}
+      {open && <ClipSheet post={open} onClose={() => setOpenId(null)} />}
+      {inviting && <InviteSheet group={group} name={view.name} onClose={() => setInviting(false)} />}
     </Screen>
   );
 }
 
-function PostCard({ post }: { post: PostView }) {
+function Waiting({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="waiting" title={label} aria-label={label}>
+      {icon}
+    </div>
+  );
+}
+
+/** 復号した動画の URL。画面に入ってから取得する */
+function useClipUrl(post: PostView, eager = false) {
   const engine = useEngine();
   const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  // 画面に入ったら取得・復号する
   useEffect(() => {
-    if (!post.content || url) return;
-    const el = ref.current;
-    if (!el) return;
+    if (!post.content) return;
     let objectUrl: string | null = null;
-    const io = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) return;
-      io.disconnect();
+    let alive = true;
+    const load = () =>
       engine.video(post).then(
-        (b) => setUrl((objectUrl = URL.createObjectURL(b))),
-        (e) => setError((e as Error).message),
+        (b) => alive && setUrl((objectUrl = URL.createObjectURL(b))),
+        () => alive && setFailed(true),
       );
-    });
-    io.observe(el);
+    let io: IntersectionObserver | null = null;
+    if (eager || !ref.current) void load();
+    else {
+      io = new IntersectionObserver(([entry]) => {
+        if (!entry?.isIntersecting) return;
+        io?.disconnect();
+        void load();
+      });
+      io.observe(ref.current);
+    }
     return () => {
-      io.disconnect();
+      alive = false;
+      io?.disconnect();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [engine, post, url]);
+    // 投稿 ID が同じなら動画も同じ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, post.id, !!post.content, eager]);
+  return { url, failed, ref };
+}
+
+export function TextOverlay({ text }: { text?: string }) {
+  if (!text) return null;
+  return <div className="overlay-text">{text}</div>;
+}
+
+function ClipCard({ post, onOpen }: { post: PostView; onOpen: () => void }) {
+  const { url, failed, ref } = useClipUrl(post);
+  return (
+    <div className="clip" ref={ref} onClick={onOpen} role="button" aria-label={`${post.authorName ?? ""} ${formatTime(post.ts)}`}>
+      {url ? (
+        <video src={url} playsInline muted loop autoPlay />
+      ) : (
+        <div className="clip-placeholder">{failed || !post.content ? <Lock size={22} /> : <Spinner size={22} />}</div>
+      )}
+      <TextOverlay text={post.content?.text} />
+      <div className="clip-meta">
+        <Avatar id={post.author} name={post.authorName} size={22} />
+        <span>{post.pending ? <Hourglass size={14} /> : formatTime(post.ts)}</span>
+      </div>
+      {(post.reactions.length > 0 || post.replies.length > 0) && (
+        <div className="clip-reactions">
+          {post.reactions.slice(0, 3).map((r) => (
+            <span key={r.emoji} className={r.mine ? "mine" : ""}>
+              {r.emoji}
+              {r.count > 1 && <small>{r.count}</small>}
+            </span>
+          ))}
+          {post.replies.length > 0 && (
+            <span>
+              <MessageCircle size={13} />
+              <small>{post.replies.length}</small>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 1 本を大きく見る。リアクションと返信 */
+function ClipSheet({ post, onClose }: { post: PostView; onClose: () => void }) {
+  const engine = useEngine();
+  const { url, failed } = useClipUrl(post, true);
+  const [muted, setMuted] = useState(false);
+  const [reply, setReply] = useState("");
+  const [custom, setCustom] = useState<string | null>(null);
+  const { busy, error, run } = useAction();
+  const canAct = !!post.content && !post.pending;
 
   return (
-    <div className="clip" ref={ref}>
-      {url ? (
-        <video src={url} playsInline muted loop autoPlay onClick={(e) => (e.currentTarget.muted = !e.currentTarget.muted)} />
-      ) : (
-        <div className="clip-placeholder">{error ? "読み込めません" : post.content ? "…" : "🔒"}</div>
-      )}
-      <div className="clip-meta">
-        <span>{post.authorName ?? "?"}</span>
-        <span>{post.pending ? "送信待ち" : formatTime(post.ts)}</span>
+    <Sheet onClose={onClose} dark>
+      <div className="clip-large">
+        {url ? (
+          <video src={url} playsInline autoPlay loop muted={muted} onClick={() => setMuted(!muted)} />
+        ) : (
+          <div className="clip-placeholder">{failed ? <Lock size={28} /> : <Spinner />}</div>
+        )}
+        <TextOverlay text={post.content?.text} />
+        <div className="clip-meta">
+          <Avatar id={post.author} name={post.authorName} size={26} />
+          <span>{post.authorName}</span>
+          <span className="muted">{formatTime(post.ts)}</span>
+        </div>
+        {url && (
+          <div className="mute-toggle">
+            <IconButton icon={muted ? VolumeX : Volume2} label={muted ? "音を出す" : "消音"} variant="soft" size={18} onClick={() => setMuted(!muted)} />
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="reaction-bar">
+        {[...new Set([...QUICK_EMOJIS, ...post.reactions.map((r) => r.emoji)])].map((e) => {
+          const r = post.reactions.find((x) => x.emoji === e);
+          return (
+            <button key={e} className={`emoji ${r?.mine ? "mine" : ""}`} disabled={!canAct || !!busy} onClick={run("react", () => engine.react(post, e))} aria-label={e}>
+              {e}
+              {r && <small>{r.count}</small>}
+            </button>
+          );
+        })}
+        {custom === null ? (
+          <IconButton icon={Plus} label="ほかの絵文字" size={20} disabled={!canAct} onClick={() => setCustom("")} />
+        ) : (
+          <form
+            className="emoji-input"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = [...custom.trim()].slice(0, 2).join("");
+              if (v) void run("react", () => engine.react(post, v))();
+              setCustom(null);
+            }}
+          >
+            <input value={custom} onChange={(e) => setCustom(e.target.value)} autoFocus maxLength={8} aria-label="絵文字" />
+            <IconButton icon={Check} label="付ける" type="submit" size={18} />
+          </form>
+        )}
+      </div>
+
+      <ul className="replies">
+        {post.replies.map((r) => (
+          <li key={r.id}>
+            <Avatar id={r.author} name={r.authorName} size={26} />
+            <div>
+              <span className="reply-name">{r.authorName ?? "?"}</span>
+              <span className="muted">{formatTime(r.ts)}</span>
+              <p>{r.text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <ErrorNote error={error} />
+      <form
+        className="reply-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const text = reply.trim();
+          if (!text) return;
+          void run("reply", async () => {
+            await engine.reply(post, text);
+            setReply("");
+          })();
+        }}
+      >
+        <input value={reply} onChange={(e) => setReply(e.target.value)} maxLength={MAX_REPLY_TEXT} placeholder="…" aria-label="返信" disabled={!canAct} />
+        <IconButton icon={Send} label="返信する" type="submit" variant="primary" size={20} disabled={!canAct || !reply.trim()} busy={busy === "reply"} />
+      </form>
+    </Sheet>
+  );
+}
+
+/** 招待リンクを作り、QR と共有ボタンで渡す */
+function InviteSheet({ group, name, onClose }: { group: string; name: string | null; onClose: () => void }) {
+  const engine = useEngine();
+  const [link, setLink] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, flash] = useFlash();
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    engine.createInviteLink(group, location.origin).then(setLink, (e) => setError((e as Error).message));
+  }, [engine, group]);
+
+  return (
+    <Sheet onClose={onClose}>
+      <div className="share-panel">
+        {link ? <Qr text={link} /> : error ? <ErrorNote error={error} /> : <Spinner />}
+        {link && (
+          <div className="row center">
+            <IconButton
+              icon={copied ? Check : Copy}
+              label="コピー"
+              variant="soft"
+              onClick={() => navigator.clipboard.writeText(link).then(flash)}
+            />
+            {"share" in navigator && (
+              <IconButton
+                icon={Share2}
+                label="共有"
+                variant="primary"
+                onClick={() => navigator.share({ title: name ?? "knct-log", url: link }).catch(() => undefined)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </Sheet>
   );
 }

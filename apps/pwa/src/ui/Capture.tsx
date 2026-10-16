@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Screen } from "./Layout.tsx";
+import { Check, Send, SwitchCamera, Type, X } from "lucide-react";
+import { MAX_POST_TEXT } from "@knct-log/core";
+import { Avatar, ErrorNote, IconButton, Spinner } from "./common.tsx";
+import { TextOverlay } from "./GroupPage.tsx";
 import { go, useEngine, useLive } from "./hooks.ts";
 
 const CLIP_MS = 3000;
@@ -15,17 +18,26 @@ function pickMime() {
   return MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
 }
 
-/** 3 秒固定・撮り直しなし。撮り終えたらそのまま暗号化して送る。 */
+type Clip = { bytes: Uint8Array<ArrayBuffer>; mime: string; url: string; takenAt: number };
+
+/**
+ * 3 秒固定・撮り直しなし。撮ったら文字を入れるかどうかだけ選んで送る。
+ * 撮り終えたあとは閉じるボタンを出さない（撮り直しの代わりにならないように）。
+ */
 export function Capture({ preselect }: { preselect: string | null }) {
   const engine = useEngine();
+  const back = preselect ? `/g/${preselect}` : "/";
   const groups = useLive(async (e) => {
     const gs = (await e.groups()).filter((g) => g.isMember && g.hasKey);
     return Promise.all(gs.map(async (g) => ({ ...g, posted: await e.postedThisHour(g.group) })));
   });
   const [targets, setTargets] = useState<Set<string> | null>(null);
   const [facing, setFacing] = useState<"user" | "environment">("environment");
-  const [phase, setPhase] = useState<"preview" | "recording" | "sending" | "done">("preview");
-  const [remaining, setRemaining] = useState(CLIP_MS);
+  const [phase, setPhase] = useState<"preview" | "recording" | "review" | "sending" | "done">("preview");
+  const [progress, setProgress] = useState(0);
+  const [clip, setClip] = useState<Clip | null>(null);
+  const [text, setText] = useState("");
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -50,13 +62,14 @@ export function Capture({ preselect }: { preselect: string | null }) {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
       })
-      .catch((e) => setError(`カメラを使えません: ${(e as Error).message}`));
+      .catch((e) => setError((e as Error).message));
     return () => {
       cancelled = true;
     };
   }, [facing, phase]);
 
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
+  useEffect(() => () => void (clip && URL.revokeObjectURL(clip.url)), [clip]);
 
   async function record() {
     const stream = streamRef.current;
@@ -70,70 +83,111 @@ export function Capture({ preselect }: { preselect: string | null }) {
     const done = new Promise<void>((r) => (rec.onstop = () => r()));
     rec.start();
     const started = performance.now();
-    const timer = setInterval(() => setRemaining(Math.max(0, CLIP_MS - (performance.now() - started))), 100);
+    const timer = setInterval(() => setProgress(Math.min(1, (performance.now() - started) / CLIP_MS)), 50);
     await new Promise((r) => setTimeout(r, CLIP_MS));
     rec.stop();
     await done;
     clearInterval(timer);
     stream.getTracks().forEach((t) => t.stop());
+    const blob = new Blob(chunks, { type: rec.mimeType || mime || "video/webm" });
+    setClip({ bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type, url: URL.createObjectURL(blob), takenAt });
+    setPhase("review");
+  }
+
+  async function send() {
+    if (!clip || !targets?.size) return;
     setPhase("sending");
+    setEditing(false);
     try {
-      const blob = new Blob(chunks, { type: rec.mimeType || mime || "video/webm" });
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      await engine.post([...targets], bytes, blob.type, CLIP_MS, takenAt);
+      await engine.post([...targets], clip.bytes, clip.mime, CLIP_MS, clip.takenAt, text);
       setPhase("done");
       setTimeout(() => go(targets.size === 1 ? `/g/${[...targets][0]}` : "/"), 600);
     } catch (e) {
-      setError(`送れませんでした: ${(e as Error).message}`);
-      setPhase("preview");
+      setError((e as Error).message);
+      setPhase("review");
     }
   }
 
+  const open = groups?.filter((g) => !g.posted) ?? [];
   const noTarget = !targets || targets.size === 0;
+  const showTargets = (groups?.length ?? 0) > 1 && (phase === "preview" || phase === "review");
+
   return (
-    <Screen title="撮影" back={preselect ? `/g/${preselect}` : "/"}>
-      <div className="camera">
-        <video ref={videoRef} autoPlay playsInline muted className={facing === "user" ? "mirror" : ""} />
-        {phase === "recording" && <div className="countdown">{Math.ceil(remaining / 1000)}</div>}
-        {phase === "sending" && <div className="countdown small">暗号化して送信中…</div>}
-        {phase === "done" && <div className="countdown small">送りました</div>}
+    <div className="fullscreen dark capture">
+      <div className="viewfinder" onClick={() => phase === "review" && !editing && setEditing(true)}>
+        {phase === "review" || phase === "sending" || phase === "done" ? (
+          <video key="clip" src={clip?.url} autoPlay loop playsInline />
+        ) : (
+          <video key="live" ref={videoRef} autoPlay playsInline muted className={facing === "user" ? "mirror" : ""} />
+        )}
+        {editing ? (
+          <input
+            className="overlay-text editing"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
+            maxLength={MAX_POST_TEXT}
+            autoFocus
+            aria-label="文字"
+          />
+        ) : (
+          phase !== "preview" && phase !== "recording" && <TextOverlay text={text.trim()} />
+        )}
+        {phase === "sending" && <div className="center-badge"><Spinner size={40} /></div>}
+        {phase === "done" && <div className="center-badge"><Check size={48} /></div>}
       </div>
-      {error && <p className="error">{error}</p>}
-      {groups && groups.length > 1 && phase === "preview" && (
-        <fieldset className="targets">
-          <legend>送り先</legend>
-          {groups.map((g) => (
-            <label key={g.group} className={g.posted ? "disabled" : ""}>
-              <input
-                type="checkbox"
-                disabled={g.posted}
-                checked={targets?.has(g.group) ?? false}
-                onChange={(e) => {
-                  const next = new Set(targets);
-                  if (e.target.checked) next.add(g.group);
-                  else next.delete(g.group);
-                  setTargets(next);
-                }}
-              />
-              {g.name ?? "…"}
-              {g.posted && <span className="hint">（この1時間は撮影済み）</span>}
-            </label>
-          ))}
-        </fieldset>
-      )}
-      <div className="capture-controls">
-        <button
-          className="icon-btn"
-          aria-label="カメラ切り替え"
-          disabled={phase !== "preview"}
-          onClick={() => setFacing(facing === "user" ? "environment" : "user")}
-        >
-          ⟲
-        </button>
-        <button className="shutter" aria-label="3秒撮影" disabled={phase !== "preview" || noTarget} onClick={record} />
-        <span className="icon-btn" />
+
+      <div className="top-controls">
+        {phase === "preview" ? <IconButton icon={X} label="閉じる" variant="soft" onClick={() => go(back)} /> : <span />}
+        {phase === "preview" && <IconButton icon={SwitchCamera} label="カメラ切り替え" variant="soft" onClick={() => setFacing(facing === "user" ? "environment" : "user")} />}
+        {phase === "review" && <IconButton icon={Type} label="文字を入れる" variant="soft" onClick={() => setEditing(true)} />}
       </div>
-      <p className="hint center">{noTarget ? "この1時間はもう撮りました。" : "ボタンを押すと3秒撮って、そのまま送ります（撮り直しはできません）。"}</p>
-    </Screen>
+
+      <div className="bottom-controls">
+        <ErrorNote error={error} />
+        {showTargets && (
+          <div className="targets" role="group" aria-label="送り先">
+            {groups!.map((g) => {
+              const on = targets?.has(g.group) ?? false;
+              return (
+                <button
+                  key={g.group}
+                  className={`target ${on ? "on" : ""}`}
+                  disabled={g.posted || phase !== "preview"}
+                  aria-pressed={on}
+                  title={g.name ?? ""}
+                  onClick={() => {
+                    const next = new Set(targets);
+                    if (on) next.delete(g.group);
+                    else next.add(g.group);
+                    setTargets(next);
+                  }}
+                >
+                  <Avatar id={g.group} name={g.name} size={36} />
+                  {g.posted && <Check size={14} className="target-done" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="shutter-row">
+          {phase === "review" ? (
+            <button className="send-btn" aria-label="送る" title="送る" disabled={noTarget} onClick={send}>
+              <Send size={30} />
+            </button>
+          ) : (
+            <button
+              className={`shutter ${phase === "recording" ? "recording" : ""}`}
+              style={{ "--p": progress } as React.CSSProperties}
+              aria-label="3秒撮影"
+              title="3秒撮影"
+              disabled={phase !== "preview" || noTarget || open.length === 0}
+              onClick={record}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

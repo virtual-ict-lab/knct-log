@@ -2,7 +2,15 @@
 //   CF_URL=http://127.0.0.1:8787 CAMPUS_URL=http://127.0.0.1:3000 pnpm vitest run test/e2e-sync.test.ts
 import { describe, expect, it } from "vitest";
 import {
+  ApiClient,
   type PostContent,
+  cryptoKeySigner,
+  generateAccountSecret,
+  importAccountKeys,
+  newAmk,
+  openAccountDoc,
+  sealBundle,
+  signAccountDoc,
   createGroup,
   createInvite,
   createPost,
@@ -55,5 +63,16 @@ describe.skipIf(!cfUrl || !campusUrl)("e2e sync (live servers)", () => {
     const got = recs.find((r) => r.id === p.id)!;
     const opened = await openContent<PostContent>(g.key, got.header);
     expect(await decryptBlob(opened.ck, await alice.api.downloadBlob(blob.blobId), blob.blobId)).toEqual(video);
+  });
+
+  it("makes an account created on campus available off campus", { timeout: 60_000 }, async () => {
+    const secret = await generateAccountSecret("学内で作った人");
+    const keys = await importAccountKeys(secret);
+    const signer = cryptoKeySigner(keys.signPub, keys.sign.privateKey);
+    const doc = { v: 1 as const, account: secret.signPub, ts: Date.now(), bundle: await sealBundle(newAmk(), secret), unlocks: [] };
+    await new ApiClient(campusUrl!, signer).putAccount(await signAccountDoc(signer, doc));
+    const atCf = new ApiClient(cfUrl!, signer);
+    const got = await eventually(() => atCf.getAccount(secret.signPub), (e) => e !== null);
+    expect((await openAccountDoc(got)).ts).toBe(doc.ts);
   });
 });

@@ -107,6 +107,21 @@ export class ApiClient {
     return new Uint8Array(await res.arrayBuffer());
   }
 
+  /** アカウント文書（暗号化された鍵と、ロック解除手段）。認証なしで取得できる */
+  async getAccount(pk: string): Promise<Envelope | null> {
+    try {
+      return await this.raw<Envelope>("GET", `/v1/accounts/${pk}`, undefined, false);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  /** アカウント文書を更新する。ts が保存済みより古いと 409 */
+  putAccount(env: Envelope) {
+    return this.raw<void>("PUT", "/v1/accounts", env, false);
+  }
+
   pushSubscribe(sub: { endpoint: string; keys: { p256dh: string; auth: string } }) {
     return this.raw<void>("POST", "/v1/push/subscribe", sub);
   }

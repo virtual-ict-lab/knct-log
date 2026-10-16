@@ -33,7 +33,7 @@ PWA は Cloudflare Pages に置く:
 ```sh
 cd apps/pwa
 VITE_ENDPOINTS="学内=https://campus.knct-log.example,Cloudflare=https://knct-log.<account>.workers.dev" \
-VITE_VAPID_PUBLIC_KEY=... pnpm build
+VITE_VAPID_PUBLIC_KEY=... VITE_RP_ID=knct-log.example pnpm build
 wrangler pages deploy dist
 ```
 
@@ -59,7 +59,8 @@ PWA は HTTPS で配信されるので、学内サーバーも HTTPS でない�
 ### CF 障害時にも学内だけで動かすために
 
 - **DNS**：`campus.knct-log.example` の名前解決を Cloudflare DNS だけに頼らない。**学内 DNS にも同じレコードを登録する**か、Cloudflare 以外の DNS で管理する。
-- **PWA**：Service Worker がアプリ全体をキャッシュしているので、一度開いた端末は CF Pages が落ちていても起動できる。障害中に新しくインストールする人のために、学内サーバーも PWA を配信している（`STATIC_DIR`）。ただしオリジンが違うので別アプリ扱いになり、鍵も別になる点に注意。
+- **PWA**：Service Worker がアプリ全体をキャッシュしているので、一度開いた端末は CF Pages が落ちていても起動できる。障害中に新しくインストールする人のために、学内サーバーも PWA を配信している（`STATIC_DIR`）。オリジンが違うので別アプリ扱いになるが、パスキーでログインすれば同じアカウントを使える。
+- **パスキー**：パスキーはドメイン（RP ID）に結びつく。PWA の配信元（例 `app.knct-log.example`）と学内サーバー（`campus.knct-log.example`）を**同じ親ドメインの下に置き**、ビルド時に `VITE_RP_ID=knct-log.example` を指定すると、どちらから開いても同じパスキーを使える。パスキーの検証にサーバーは関わらない（PRF の出力は端末の中だけで使う）ので、CF が落ちていてもログインできる。
 - **証明書**：90 日有効なので、短い障害では問題にならない。
 - **毎時の通知**：CF が送れなかったスロットは、学内が 3 分後に代わりに送る（学内からインターネット上の Push サービスへ外向きで届く）。
 - `PEER_URL` を設定しなければ、学内サーバーは CF なしの単独運用になる。

@@ -1,38 +1,30 @@
 import type { ReactNode } from "react";
+import { ChevronLeft, CloudOff } from "lucide-react";
+import { IconButton } from "./common.tsx";
 import { go, useEngine } from "./hooks.ts";
 
 export function Screen(props: { title: ReactNode; back?: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <div className="screen">
       <header className="bar">
-        {props.back !== undefined ? (
-          <button className="icon-btn" aria-label="戻る" onClick={() => go(props.back!)}>
-            ‹
-          </button>
-        ) : (
-          <span className="bar-spacer" />
-        )}
+        {props.back !== undefined ? <IconButton icon={ChevronLeft} label="戻る" size={26} onClick={() => go(props.back!)} /> : <span className="bar-spacer" />}
         <h1>{props.title}</h1>
         <div className="bar-actions">{props.actions}</div>
       </header>
-      <ConnectionBanner />
       <main>{props.children}</main>
     </div>
   );
 }
 
-function ConnectionBanner() {
-  const engine = useEngine();
-  if (engine.lastError) return <div className="banner warn">{engine.lastError}</div>;
-  return null;
-}
-
-export function ConnectionChip() {
+/** 接続先。つながっていれば色の点、つながらなければ雲のアイコン（理由は title に） */
+export function ConnectionDot() {
   const engine = useEngine();
   const c = engine.conn;
-  return (
-    <span className={`chip ${c ? "ok" : "off"}`} title={c?.endpoint.url}>
-      {c ? c.endpoint.label : "オフライン"}
-    </span>
-  );
+  if (!c || engine.lastError)
+    return (
+      <span className="conn off" title={engine.lastError ?? "オフライン"} aria-label="オフライン">
+        <CloudOff size={18} />
+      </span>
+    );
+  return <span className={`conn ok ${c.serverId}`} title={`${c.endpoint.label}（${c.serverId}）`} aria-label={c.endpoint.label} />;
 }

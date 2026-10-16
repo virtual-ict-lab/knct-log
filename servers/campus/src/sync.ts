@@ -1,5 +1,5 @@
 import { ApiClient, ApiError, type Envelope, type Signer, fromB64u, utf8 } from "@knct-log/core";
-import type { Deps, Store } from "@knct-log/server-app";
+import { type Deps, type Store, upsertAccount } from "@knct-log/server-app";
 
 const BATCH = 100;
 const PULL_CURSOR = "sync.pull.records";
@@ -7,6 +7,8 @@ const SUBS_PULL = "sync.pull.subs";
 const SUBS_PUSH = "sync.push.subs";
 const SLOTS_PULL = "sync.pull.slots";
 const SLOTS_PUSH = "sync.push.slots";
+const ACC_PULL = "sync.pull.accounts";
+const ACC_PUSH = "sync.push.accounts";
 const PEER_INSTANCE = "sync.peer_instance";
 export const LAST_OK = "sync.last_ok";
 
@@ -37,6 +39,7 @@ export class SyncWorker {
       const blobs = await this.fetchMissingBlobs();
       await this.syncSubs();
       await this.syncSlots();
+      await this.syncAccounts();
       await this.store.kvSet(LAST_OK, String(this.store.now()));
       return { pulled, pushed, blobs };
     } finally {
@@ -56,7 +59,7 @@ export class SyncWorker {
     if (known !== null) {
       console.warn(`sync: peer database changed (${known} -> ${instance}); resyncing everything`);
       await this.deps.sql.batch([
-        ...[PULL_CURSOR, SUBS_PULL, SUBS_PUSH, SLOTS_PULL, SLOTS_PUSH].map((k) => ({ sql: "DELETE FROM kv WHERE k = ?", params: [k] })),
+        ...[PULL_CURSOR, SUBS_PULL, SUBS_PUSH, SLOTS_PULL, SLOTS_PUSH, ACC_PULL, ACC_PUSH].map((k) => ({ sql: "DELETE FROM kv WHERE k = ?", params: [k] })),
         { sql: "UPDATE records SET pushed = 0", params: [] },
       ]);
     }
@@ -166,6 +169,28 @@ export class SyncWorker {
     if (local.length) {
       await this.peer.peerPost("push-subs", { subs: local });
       await this.store.kvSet(SUBS_PUSH, String(local.at(-1)!.updated_at));
+    }
+  }
+
+  /** アカウント文書。ts の新しい方を採用する（署名はそれぞれのサーバーで検証） */
+  private async syncAccounts() {
+    type Acc = { payload: string; sig: string; updated_at: number };
+    for (;;) {
+      const since = await this.cursor(ACC_PULL);
+      const { accounts } = await this.peer.peerGet<{ accounts: Acc[] }>(`accounts?since=${since}`);
+      if (accounts.length === 0) break;
+      for (const a of accounts) await upsertAccount(this.store, { payload: a.payload, sig: a.sig });
+      await this.store.kvSet(ACC_PULL, String(accounts.at(-1)!.updated_at));
+    }
+    for (;;) {
+      const since = await this.cursor(ACC_PUSH);
+      const local = await this.deps.sql.all<Acc>(
+        "SELECT payload, sig, updated_at FROM accounts WHERE updated_at > ? ORDER BY updated_at LIMIT 200",
+        since,
+      );
+      if (local.length === 0) break;
+      await this.peer.peerPost("accounts", { accounts: local.map((a) => ({ payload: a.payload, sig: a.sig })) });
+      await this.store.kvSet(ACC_PUSH, String(local.at(-1)!.updated_at));
     }
   }
 

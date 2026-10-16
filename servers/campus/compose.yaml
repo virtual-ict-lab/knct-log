@@ -6,6 +6,7 @@ services:
       args:
         VITE_ENDPOINTS: ${VITE_ENDPOINTS:-}
         VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+        VITE_RP_ID: ${VITE_RP_ID:-}
     env_file: .env
     volumes:
       - ./data:/data

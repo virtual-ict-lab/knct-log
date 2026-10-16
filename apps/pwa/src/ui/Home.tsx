@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { ConnectionChip, Screen } from "./Layout.tsx";
+import { Camera, Check, Crown, Hourglass, KeyRound, Plus, ScanLine, Settings, Users, X } from "lucide-react";
+import { ConnectionDot, Screen } from "./Layout.tsx";
+import { Avatar, IconButton } from "./common.tsx";
+import { Scanner } from "./Scanner.tsx";
 import { go, useEngine, useLive } from "./hooks.ts";
 
 export function Home() {
   const engine = useEngine();
   const groups = useLive((e) => e.groups());
   const [creating, setCreating] = useState(false);
+  const [scan, setScan] = useState(false);
   const [name, setName] = useState("");
 
   async function create(e: React.FormEvent) {
@@ -16,65 +20,63 @@ export function Home() {
     go(`/g/${g}`);
   }
 
+  if (scan) return <Scanner onClose={() => setScan(false)} onResult={(h) => go(h)} />;
+
   return (
     <Screen
-      title="knct-log"
+      title={<span className="logo small">knct-log</span>}
       actions={
         <>
-          <ConnectionChip />
-          <button className="icon-btn" aria-label="設定" onClick={() => go("/settings")}>
-            ⚙
-          </button>
+          <ConnectionDot />
+          <IconButton icon={ScanLine} label="招待 QR を読む" onClick={() => setScan(true)} />
+          <IconButton icon={Settings} label="設定" onClick={() => go("/settings")} />
         </>
       }
     >
-      <section className="stack">
-        {groups?.length === 0 && (
-          <div className="empty">
-            <p>まだグループがありません。</p>
-            <p className="hint">グループを作るか、招待リンクを開いて参加しましょう。</p>
-          </div>
-        )}
+      <ul className="group-list">
         {groups?.map((g) => (
-          <button key={g.group} className="card group-card" onClick={() => go(`/g/${g.group}`)}>
-            <span className="group-name">{g.name ?? (g.joining ? "参加手続き中…" : "名前を取得中…")}</span>
-            <span className="group-meta">
-              {g.joining ? (
-                <span className="badge">承認待ち</span>
-              ) : !g.hasKey ? (
-                <span className="badge">鍵の受け取り待ち</span>
-              ) : (
-                <span>{g.members.length}人</span>
-              )}
-              {g.isAdmin && <span className="badge subtle">管理者</span>}
-            </span>
-          </button>
+          <li key={g.group}>
+            <button className="group-row" onClick={() => go(`/g/${g.group}`)}>
+              <Avatar id={g.group} name={g.name} size={44} />
+              <span className="group-name">{g.name ?? "…"}</span>
+              <span className="group-meta">
+                {g.joining ? (
+                  <Hourglass size={18} aria-label="参加待ち" />
+                ) : !g.hasKey ? (
+                  <KeyRound size={18} aria-label="鍵の受け取り待ち" />
+                ) : (
+                  <>
+                    {g.isAdmin && <Crown size={16} aria-label="管理者" />}
+                    <Users size={16} aria-hidden />
+                    <span>{g.members.length}</span>
+                  </>
+                )}
+              </span>
+            </button>
+          </li>
         ))}
-
-        {creating ? (
-          <form className="card stack" onSubmit={create}>
-            <label className="field">
-              <span>グループ名</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} required autoFocus />
-            </label>
-            <div className="row">
-              <button type="button" className="btn" onClick={() => setCreating(false)}>
-                やめる
-              </button>
-              <button className="btn primary" disabled={!name.trim()}>
-                作る
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button className="btn" onClick={() => setCreating(true)}>
-            ＋ グループを作る
-          </button>
-        )}
-      </section>
+        <li>
+          {creating ? (
+            <form className="group-row new" onSubmit={create}>
+              <span className="avatar placeholder" aria-hidden>
+                <Users size={20} />
+              </span>
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} required autoFocus placeholder="グループ名" aria-label="グループ名" />
+              <IconButton icon={X} label="やめる" onClick={() => setCreating(false)} />
+              <IconButton icon={Check} label="作る" type="submit" variant="primary" disabled={!name.trim()} />
+            </form>
+          ) : (
+            <button className="group-row add" onClick={() => setCreating(true)} aria-label="グループを作る" title="グループを作る">
+              <span className="avatar placeholder" aria-hidden>
+                <Plus size={22} />
+              </span>
+            </button>
+          )}
+        </li>
+      </ul>
       {groups && groups.some((g) => g.hasKey) && (
-        <button className="fab" aria-label="撮影" onClick={() => go("/capture")}>
-          ●
+        <button className="fab" aria-label="撮影" title="撮影" onClick={() => go("/capture")}>
+          <Camera size={28} />
         </button>
       )}
     </Screen>

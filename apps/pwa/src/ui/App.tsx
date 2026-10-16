@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { go, useEngine, useEngineVersion, useRoute } from "./hooks.ts";
-import { Setup } from "./Setup.tsx";
+import { Welcome } from "./Welcome.tsx";
+import { LinkAccept } from "./LinkAccept.tsx";
 import { Home } from "./Home.tsx";
 import { GroupPage } from "./GroupPage.tsx";
 import { GroupSettings } from "./GroupSettings.tsx";
@@ -17,7 +18,7 @@ export function App() {
 
   // 表示中は定期的に同期。復帰時・オンライン復帰時は接続先も選び直す
   useEffect(() => {
-    if (!engine.device) return;
+    if (!engine.account) return;
     void engine.sync();
     const tick = () => document.visibilityState === "visible" && void engine.sync();
     const reconnect = () => {
@@ -35,11 +36,13 @@ export function App() {
       window.removeEventListener("online", reconnect);
       navigator.serviceWorker?.removeEventListener("message", onMsg);
     };
-  }, [engine, engine.device]);
-
-  if (!engine.device) return <Setup />;
+  }, [engine, engine.me]);
 
   const [head, id, sub] = parts;
+  // 端末の引き継ぎリンクは、アカウントがまだない端末で開く
+  if (head === "link") return <LinkAccept a={query.get("a")} u={query.get("u")} k={query.get("k")} />;
+  if (!engine.account) return <Welcome />;
+
   switch (head) {
     case "g":
       if (!id) break;
