@@ -87,6 +87,8 @@ select { width: auto; }
 .icon-btn.soft { background: var(--soft); }
 .icon-btn.primary { background: var(--accent); color: var(--accent-text); }
 .icon-btn.danger { background: var(--danger-bg); color: var(--danger); width: 56px; height: 56px; }
+.icon-btn.with-text { width: auto; display: inline-flex; gap: 6px; padding: 0 16px; font-weight: 600; font-size: 15px; }
+.icon-btn.danger.with-text { height: 48px; padding: 0 20px; }
 .dark .icon-btn.soft { background: rgb(255 255 255 / 0.16); color: #fff; backdrop-filter: blur(8px); }
 
 .fab {
@@ -114,7 +116,13 @@ select { width: auto; }
 details.card summary { list-style: none; cursor: pointer; }
 details.card summary::-webkit-details-marker { display: none; }
 details.card[open] summary { margin-bottom: 8px; }
+details.card .chevron { transition: transform 0.15s; }
+details.card[open] .chevron { transform: rotate(180deg); }
+details.card > .small { margin-bottom: 8px; }
 .badge-count { font-weight: 700; min-width: 24px; }
+.section-label { font-size: 13px; font-weight: 700; color: var(--muted); margin: 8px 4px -4px; }
+.row-label { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row-label .small { color: var(--muted); }
 .count { text-align: right; font-size: 13px; padding: 0 4px 4px; }
 
 .note { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 12px; font-size: 14px; }
@@ -283,7 +291,13 @@ details.card[open] summary { margin-bottom: 8px; }
 .members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .members li { display: flex; gap: 12px; align-items: center; min-height: 52px; }
 .members .me { font-weight: 800; }
-.members .crown { color: #e0a100; margin: 0 12px; }
+.members .crown { color: #e0a100; }
+.admin-tag { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; color: var(--muted); margin-right: 8px; }
+.members .icon-btn.soft .lucide-crown { opacity: 0.5; }
+.card .hint { padding: 0 4px 6px; }
+.hours-row { flex-wrap: wrap; row-gap: 4px; }
+.hours-row .row-label { white-space: nowrap; flex: 1 0 auto; }
+.hours { display: inline-flex; gap: 8px; align-items: center; margin-left: auto; }
 .members .icon-btn.soft { color: var(--muted); width: 40px; height: 40px; margin-right: 2px; }
 .member-pick { display: flex; gap: 12px; align-items: center; width: 100%; border: 0; background: none; padding: 6px 4px; border-radius: 12px; text-align: left; }
 .member-pick:hover { background: var(--soft); }

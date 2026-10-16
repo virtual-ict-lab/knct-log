@@ -36,20 +36,27 @@ export function GroupSettings({ group }: { group: string }) {
       <ErrorNote error={error} />
 
       {view.isAdmin && (
+        <>
+        <h2 className="section-label">グループ</h2>
         <section className="card">
           <div className="field-row">
             <Avatar id={group} name={name || view.name} size={40} />
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="グループ名" />
           </div>
-          <div className="field-row" title="撮影の通知を送る時間帯">
-            <Bell size={20} className="muted" aria-label="通知の時間帯" />
-            <HourSelect value={hours[0]} onChange={(h) => setHours([h, hours[1]])} max={23} label="開始" />
-            <span className="muted">–</span>
-            <HourSelect value={hours[1]} onChange={(h) => setHours([hours[0], h])} min={1} max={24} label="終了" />
-            <span className="spacer" />
+          <div className="field-row hours-row">
+            <Bell size={20} className="muted" />
+            <span className="row-label">通知の時間帯</span>
+            <span className="hours">
+              <HourSelect value={hours[0]} onChange={(h) => setHours([h, hours[1]])} max={23} label="開始" />
+              <span className="muted">–</span>
+              <HourSelect value={hours[1]} onChange={(h) => setHours([hours[0], h])} min={1} max={24} label="終了" />
+            </span>
+          </div>
+          <div className="row end">
             <IconButton
               icon={Check}
               label="保存"
+              text="保存"
               variant="primary"
               disabled={!dirty || !name.trim() || hours[0] >= hours[1]}
               busy={busy === "save"}
@@ -57,8 +64,12 @@ export function GroupSettings({ group }: { group: string }) {
             />
           </div>
         </section>
+        </>
       )}
 
+      <h2 className="section-label">
+        メンバー {view.members.length} / 12
+      </h2>
       <section className="card">
         <ul className="members">
           {view.members.map((m) => (
@@ -67,7 +78,10 @@ export function GroupSettings({ group }: { group: string }) {
               <span className={m.isMe ? "me" : ""}>{label(m)}</span>
               <span className="spacer" />
               {m.isAdmin ? (
-                <Crown size={20} className="crown" aria-label="管理者" />
+                <span className="admin-tag">
+                  <Crown size={18} className="crown" />
+                  管理者
+                </span>
               ) : (
                 view.isAdmin && (
                   <IconButton
@@ -85,16 +99,18 @@ export function GroupSettings({ group }: { group: string }) {
             </li>
           ))}
         </ul>
-        <div className="count muted">{view.members.length} / 12</div>
+        {view.isAdmin && others.length > 0 && <div className="muted small hint">王冠を押すと管理者を移せます</div>}
       </section>
 
       {view.invites.length > 0 && (
+        <>
+        <h2 className="section-label">有効な招待リンク</h2>
         <section className="card">
           <ul className="members">
             {view.invites.map((i) => (
               <li key={i.id}>
                 <Link size={18} className="muted" aria-label="招待リンク" />
-                <span className="muted">{i.exp ? new Date(i.exp).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" }) : "∞"}</span>
+                <span className="muted">{i.exp ? `${new Date(i.exp).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })} まで` : "期限なし"}</span>
                 <span className="spacer" />
                 {(view.isAdmin || i.mine) && (
                   <IconButton icon={X} label="招待を無効にする" onClick={run("revoke", () => engine.revokeInvite(group, i.id))} />
@@ -103,12 +119,14 @@ export function GroupSettings({ group }: { group: string }) {
             ))}
           </ul>
         </section>
+        </>
       )}
 
       <div className="row center">
         <IconButton
           icon={LogOut}
           label="退会"
+          text="グループを退会"
           variant="danger"
           size={22}
           onClick={() => (view.isAdmin && others.length > 0 ? setPickSuccessor(true) : void run("leave", () => leave())())}
@@ -117,9 +135,7 @@ export function GroupSettings({ group }: { group: string }) {
 
       {pickSuccessor && (
         <Sheet onClose={() => setPickSuccessor(false)}>
-          <div className="sheet-title">
-            <Crown size={20} /> <LogOut size={20} />
-          </div>
+          <div className="sheet-title">次の管理者を選んで退会</div>
           <ul className="members pick">
             {others.map((m) => (
               <li key={m.pk}>
