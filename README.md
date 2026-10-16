@@ -30,7 +30,7 @@ docs/                 デプロイ手順・脅威モデル
 
 ## 開発
 
-Node 26 と pnpm 11（`mise install` で入る）。
+Node 26 と pnpm 12（`mise install` で入る）。
 
 ```sh
 pnpm install
