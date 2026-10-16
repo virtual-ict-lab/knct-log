@@ -191,9 +191,10 @@ export async function createPost(
 }
 
 /** 投稿へのリアクション。投稿と同じ時刻に消える。作成者ごと・投稿ごとに最新のものが有効 */
-export async function createReaction(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, post: PostRef, emoji: string) {
+/** 作成者ごと・投稿ごとに ts が最新のものが有効。続けて押すときは ts を前より大きくする */
+export async function createReaction(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, post: PostRef, emoji: string, ts?: number) {
   const content: ReactionContent = { ref: post.id, emoji };
-  return sealedRecord(actor, s.group, "reaction", s.currentEpoch!, key, content, { exp: post.exp, body: { to: post.author } });
+  return sealedRecord(actor, s.group, "reaction", s.currentEpoch!, key, content, { exp: post.exp, body: { to: post.author }, ts });
 }
 
 export async function createReply(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, post: PostRef, text: string) {
