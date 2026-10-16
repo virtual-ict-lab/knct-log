@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Screen } from "./Layout.tsx";
+import { ErrorNote, Spinner } from "./common.tsx";
 import { go, useEngine } from "./hooks.ts";
 
 export function Join(props: { g: string | null; i: string | null; t: string | null }) {
@@ -11,10 +12,7 @@ export function Join(props: { g: string | null; i: string | null; t: string | nu
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (!g || !i || !t) {
-      setError("招待リンクが壊れています。");
-      return;
-    }
+    if (!g || !i || !t) return setError("招待リンクが壊れています");
     engine.join(g, i, t).then(
       () => go(`/g/${g}`),
       (e) => setError((e as Error).message),
@@ -22,8 +20,8 @@ export function Join(props: { g: string | null; i: string | null; t: string | nu
   }, [engine, g, i, t]);
 
   return (
-    <Screen title="グループに参加" back="/">
-      <div className="empty">{error ? <p className="error">{error}</p> : <p>参加しています…</p>}</div>
+    <Screen title="" back="/">
+      <div className="stack-center">{error ? <ErrorNote error={error} /> : <Spinner size={40} />}</div>
     </Screen>
   );
 }

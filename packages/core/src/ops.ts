@@ -23,6 +23,30 @@ export interface PostContent {
   mime: string;
   durationMs: number;
   takenAt: number;
+  /** 動画の中央に重ねて表示する文字（任意） */
+  text?: string;
+}
+
+export const MAX_POST_TEXT = 40;
+export const MAX_REPLY_TEXT = 200;
+
+export interface ReactionContent {
+  /** 対象の投稿 ID */
+  ref: string;
+  /** 絵文字。空文字はリアクションの取り消し */
+  emoji: string;
+}
+
+export interface ReplyContent {
+  ref: string;
+  text: string;
+}
+
+/** 反応先の投稿 */
+export interface PostRef {
+  id: string;
+  author: string;
+  exp: number;
 }
 
 async function sealJson(key: Uint8Array<ArrayBuffer>, h: Pick<Header, "group" | "kind" | "epoch" | "author">, obj: unknown) {
@@ -121,7 +145,7 @@ export async function wrapFor(
 export async function sealedRecord(
   actor: Actor,
   group: string,
-  kind: "group.settings" | "profile" | "post",
+  kind: "group.settings" | "profile" | "post" | "reaction" | "reply",
   epoch: string,
   key: Uint8Array<ArrayBuffer>,
   content: unknown,
@@ -157,10 +181,23 @@ export async function createPost(
   blobId: string,
   content: PostContent,
 ) {
+  if (content.text !== undefined && content.text.length > MAX_POST_TEXT) throw new Error("text too long");
   const ts = Date.now();
   return sealedRecord(actor, s.group, "post", s.currentEpoch!, key, content, {
     ts,
     blobs: [blobId],
     exp: ts + POST_TTL_MS,
   });
+}
+
+/** 投稿へのリアクション。投稿と同じ時刻に消える。作成者ごと・投稿ごとに最新のものが有効 */
+export async function createReaction(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, post: PostRef, emoji: string) {
+  const content: ReactionContent = { ref: post.id, emoji };
+  return sealedRecord(actor, s.group, "reaction", s.currentEpoch!, key, content, { exp: post.exp, body: { to: post.author } });
+}
+
+export async function createReply(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, post: PostRef, text: string) {
+  if (text.length > MAX_REPLY_TEXT) throw new Error("reply too long");
+  const content: ReplyContent = { ref: post.id, text };
+  return sealedRecord(actor, s.group, "reply", s.currentEpoch!, key, content, { exp: post.exp, body: { to: post.author } });
 }

@@ -170,8 +170,8 @@ export class Store {
         const have = await this.existing(h.deps);
         const missDeps = h.deps.filter((d) => !have.has(d));
         if (missDeps.length) { results.push({ id, status: "missing", missing: missDeps }); continue; }
+        if (h.exp !== undefined && h.exp > h.ts + POST_TTL_MS + MAX_CLOCK_SKEW_MS) { invalid("exp too far"); continue; }
         if (h.kind === "post") {
-          if (h.exp! > h.ts + POST_TTL_MS + MAX_CLOCK_SKEW_MS) { invalid("exp too far"); continue; }
           const stored = await this.storedBlobs(h.blobs!);
           const miss = h.blobs!.filter((b) => !stored.has(b));
           if (miss.length) { results.push({ id, status: "missing", missing: miss.map((b) => BLOB_PREFIX + b) }); continue; }

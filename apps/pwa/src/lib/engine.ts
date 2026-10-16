@@ -1,35 +1,57 @@
 import {
+  type AccountDoc,
   type Actor,
   ApiClient,
   ApiError,
+  type DeviceKeys,
+  type Envelope,
   type GroupMeta,
+  LINK_TTL_MS,
   type GroupState,
   type PostContent,
   type Profile,
+  type ReactionContent,
+  type ReplyContent,
+  type Unlock,
   type VerifiedRecord,
   createGroup,
   createInvite,
   createPost,
+  createReaction,
+  createReply,
   cryptoKeySigner,
   decryptBlob,
   deriveGroupState,
+  deriveKek,
   encryptBlob,
-  generateDeviceKeys,
+  fromB64u,
+  generateAccountSecret,
+  importAccountKeys,
   joinGroup,
   leaveGroup,
+  makeUnlock,
+  newAmk,
+  openAccountDoc,
+  openBundle,
   openContent,
   openRecord,
+  openUnlock,
+  randomBytes,
   revokeInvite,
   rotateKey,
-
+  sealBundle,
   setProfile,
+  signAccountDoc,
+  toB64u,
   transferAdmin,
   unwrapGroupKey,
   updateSettings,
+  withUnlock,
   wrapFor,
 } from "@knct-log/core";
-import type { DB, Endpoint, LocalRecord, StoredDevice } from "./db.ts";
+import type { DB, Endpoint, LocalRecord, StoredAccount } from "./db.ts";
 import { pickEndpoint } from "./endpoints.ts";
+import type { Passkey } from "./passkey.ts";
 
 /** 他メンバーが先に対応するのを待つ時間（管理者は即時）。重複は無害だが減らしたい。 */
 const HELP_DELAY_MS = 2 * 60 * 1000;
@@ -58,9 +80,18 @@ export interface PostView {
   author: string;
   authorName: string | null;
   ts: number;
+  exp: number;
   blobId: string;
   content: PostContent | null;
   pending: boolean;
+  /** 絵文字ごとの数。mine は自分が付けたもの */
+  reactions: { emoji: string; count: number; mine: boolean }[];
+  replies: { id: string; author: string; authorName: string | null; text: string; ts: number }[];
+}
+
+export interface AccountInfo {
+  passkeys: number;
+  links: { id: string; exp?: number }[];
 }
 
 type Picker = (endpoints: Endpoint[]) => Promise<{ endpoint: Endpoint; serverId: string } | null>;
@@ -69,10 +100,12 @@ export class Engine extends EventTarget {
   readonly db: DB;
   private readonly fetchFn?: typeof fetch;
   private readonly picker: Picker;
-  device: StoredDevice | null = null;
+  account: StoredAccount | null = null;
   conn: Connection | null = null;
   lastError: string | null = null;
   private syncing: Promise<void> | null = null;
+  /** 復号済みの内容（レコードは不変なので ID で覚えておける） */
+  private readonly plain = new Map<string, unknown>();
 
   constructor(db: DB, opts: { fetch?: typeof fetch; picker?: Picker } = {}) {
     super();
@@ -86,35 +119,232 @@ export class Engine extends EventTarget {
   }
 
   get me() {
-    return this.device?.signPub ?? null;
+    return this.account?.keys.signPub ?? null;
+  }
+
+  get name() {
+    return this.account?.name ?? "";
   }
 
   private actor(): Actor & { kx: CryptoKeyPair } {
-    const d = this.device!;
-    return { signer: cryptoKeySigner(d.signPub, d.sign.privateKey), kxPub: d.kxPub, kx: d.kx };
+    const k = this.account!.keys;
+    return { signer: cryptoKeySigner(k.signPub, k.sign.privateKey), kxPub: k.kxPub, kx: k.kx };
   }
 
-  // ---------- 端末 ----------
+  // ---------- アカウント ----------
 
   async load() {
-    this.device = ((await this.db.get("meta", "device")) as StoredDevice | undefined) ?? null;
+    this.account = ((await this.db.get("meta", "account")) as StoredAccount | undefined) ?? null;
     this.changed();
   }
 
-  async setupDevice(name: string) {
-    const k = await generateDeviceKeys();
-    const device: StoredDevice = { ...k, name, createdAt: Date.now() };
-    await this.db.put("meta", device, "device");
-    this.device = device;
+  private async saveAccount(a: StoredAccount) {
+    const switched = this.account?.keys.signPub !== a.keys.signPub;
+    await this.db.put("meta", a, "account");
+    this.account = a;
+    if (switched) this.conn = null; // 認証に使う鍵が変わった
     this.changed();
+  }
+
+  private async storeAccount(keys: DeviceKeys, name: string, amk: Uint8Array<ArrayBuffer>, doc: Envelope, docTs: number, dirty: boolean) {
+    await this.saveAccount({ keys, name, amk, doc, docTs, dirty });
+  }
+
+  /** 新しいアカウントを作る。passkey があれば、その PRF で鍵をバックアップする（なければこの端末だけ） */
+  async createAccount(name: string, passkey: Passkey | null) {
+    const secret = await generateAccountSecret(name);
+    const amk = newAmk();
+    const unlocks: Unlock[] = [];
+    if (passkey) {
+      const { credId, prf } = await passkey.register(secret.signPub, name);
+      unlocks.push(await makeUnlock(amk, secret.signPub, "passkey", credId, await deriveKek(prf, "passkey")));
+    }
+    const keys = await importAccountKeys(secret);
+    const doc: AccountDoc = { v: 1, account: secret.signPub, ts: Date.now(), bundle: await sealBundle(amk, secret), unlocks };
+    const signer = cryptoKeySigner(keys.signPub, keys.sign.privateKey);
+    await this.storeAccount(keys, name, amk, await signAccountDoc(signer, doc), doc.ts, true);
+    void this.sync();
+  }
+
+  /** パスキーでログインする（別の端末で作ったアカウントをこの端末に取り込む） */
+  async signInWithPasskey(passkey: Passkey) {
+    const { credId, account, prf } = await passkey.authenticate();
+    const found = await this.findAccountDoc(account, (d) => d.unlocks.some((u) => u.id === credId));
+    if (!found) throw new Error("アカウントが見つかりません");
+    const u = found.doc.unlocks.find((x) => x.id === credId)!;
+    const amk = await openUnlock(found.doc, u, await deriveKek(prf, "passkey"));
+    await this.restore(found.doc, found.env, amk);
+  }
+
+  /** 既存の端末が出した QR（リンク）で取り込む。リンクはサーバー間の同期を待つことがある */
+  async acceptLink(account: string, id: string, secret: string, waitMs = 60_000) {
+    const found = await this.findAccountDoc(account, (d) => d.unlocks.some((u) => u.id === id), waitMs);
+    const u = found?.doc.unlocks.find((x) => x.id === id);
+    if (!found || !u || (u.exp !== undefined && u.exp < Date.now())) throw new Error("リンクの期限が切れています");
+    const amk = await openUnlock(found.doc, u, await deriveKek(fromB64u(secret), "link"));
+    await this.restore(found.doc, found.env, amk);
+    // 使ったリンクは消す
+    await this.mutateDoc((d) => ({ unlocks: withUnlock(d, null, id) })).catch(() => undefined);
+  }
+
+  private async restore(doc: AccountDoc, env: Envelope, amk: Uint8Array<ArrayBuffer>) {
+    const secret = await openBundle(amk, doc);
+    await this.storeAccount(await importAccountKeys(secret), secret.name, amk, env, doc.ts, false);
+    await this.sync();
+  }
+
+  /** 登録されているサーバーを順に見て、条件を満たす最新の文書を返す */
+  private async findAccountDoc(account: string, ok: (d: AccountDoc) => boolean, waitMs = 0) {
+    const f = this.fetchFn ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+    const end = Date.now() + waitMs;
+    for (;;) {
+      let best: { doc: AccountDoc; env: Envelope } | null = null;
+      for (const ep of await this.endpoints()) {
+        try {
+          const res = await f(`${ep.url.replace(/\/+$/, "")}/v1/accounts/${account}`, { signal: AbortSignal.timeout(5000) });
+          if (!res.ok) continue;
+          const env = (await res.json()) as Envelope;
+          const doc = await openAccountDoc(env);
+          if (doc.account === account && ok(doc) && (!best || doc.ts > best.doc.ts)) best = { doc, env };
+        } catch {
+          // 届かないサーバーは飛ばす
+        }
+      }
+      if (best || Date.now() >= end) return best;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+
+  /**
+   * アカウント文書を変更して公開する。サーバーの最新版に対して変更を当て、競合したらやり直す。
+   * strict のときはサーバーに届くまで失敗扱い（QR リンクなど、すぐ使うもの）。
+   */
+  private async mutateDoc(
+    f: (doc: AccountDoc, secret: () => Promise<import("@knct-log/core").AccountSecret>) => Promise<Partial<AccountDoc>> | Partial<AccountDoc>,
+    strict = false,
+  ) {
+    for (let attempt = 0; ; attempt++) {
+      const a = this.account!;
+      let env = a.doc;
+      const conn = await this.connect();
+      const remote = conn ? await conn.api.getAccount(a.keys.signPub).catch(() => null) : null;
+      if (remote) {
+        const r = await openAccountDoc(remote);
+        if (r.ts > a.docTs) env = remote;
+      }
+      const doc = await openAccountDoc(env);
+      const patch = await f(doc, () => openBundle(a.amk, doc));
+      const next: AccountDoc = { ...doc, ...patch, ts: Math.max(Date.now(), doc.ts + 1) };
+      const signed = await signAccountDoc(this.actor().signer, next);
+      await this.saveAccount({ ...this.account!, doc: signed, docTs: next.ts, dirty: true });
+      try {
+        await this.publishAccount(strict);
+        return next;
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409 && attempt < 3) continue;
+        throw e;
+      }
+    }
+  }
+
+  private async publishAccount(strict: boolean) {
+    const a = this.account;
+    if (!a?.dirty) return;
+    const conn = await this.connect();
+    if (!conn) {
+      if (strict) throw new Error("サーバーに接続できません");
+      return;
+    }
+    await conn.api.putAccount(a.doc);
+    await this.saveAccount({ ...this.account!, dirty: false });
+  }
+
+  /** 他の端末での変更（名前・パスキー）を取り込む */
+  private async refreshAccount(conn: Connection) {
+    const a = this.account!;
+    if (a.dirty) {
+      try {
+        await this.publishAccount(false);
+      } catch (e) {
+        if (!(e instanceof ApiError && e.status === 409)) throw e;
+        await this.saveAccount({ ...a, dirty: false }); // 新しい方を下で取り込む
+      }
+      return;
+    }
+    const remote = await conn.api.getAccount(a.keys.signPub);
+    if (!remote) return void (await this.saveAccount({ ...a, dirty: true }));
+    const doc = await openAccountDoc(remote);
+    if (doc.ts <= a.docTs) return;
+    const secret = await openBundle(a.amk, doc);
+    if (secret.name !== a.name) await this.forgetProfiles();
+    await this.saveAccount({ ...a, name: secret.name, doc: remote, docTs: doc.ts });
+  }
+
+  private async forgetProfiles() {
+    for (const g of await this.db.getAll("groups")) await this.db.delete("meta", `profile/${g.group}`);
+  }
+
+  async accountInfo(): Promise<AccountInfo | null> {
+    if (!this.account) return null;
+    const doc = await openAccountDoc(this.account.doc);
+    const now = Date.now();
+    return {
+      passkeys: doc.unlocks.filter((u) => u.kind === "passkey").length,
+      links: doc.unlocks.filter((u) => u.kind === "link" && (u.exp ?? 0) > now).map((u) => ({ id: u.id, exp: u.exp })),
+    };
   }
 
   async rename(name: string) {
-    this.device = { ...this.device!, name };
-    await this.db.put("meta", this.device, "device");
-    // 各グループのプロフィールは次の maintain で出し直す
-    for (const g of await this.db.getAll("groups")) await this.db.delete("meta", `profile/${g.group}`);
+    await this.mutateDoc(async (_d, secret) => {
+      const s = await secret();
+      return { bundle: await sealBundle(this.account!.amk, { ...s, name }) };
+    });
+    await this.saveAccount({ ...this.account!, name });
+    await this.forgetProfiles(); // 各グループのプロフィールは次の maintain で出し直す
+  }
+
+  /** この端末のパスキーを追加する（パスキーなしで作ったアカウントや、別の端末のパスキー） */
+  async addPasskey(passkey: Passkey) {
+    const { credId, prf } = await passkey.register(this.me!, this.name);
+    const u = await makeUnlock(this.account!.amk, this.me!, "passkey", credId, await deriveKek(prf, "passkey"));
+    await this.mutateDoc((d) => ({ unlocks: withUnlock(d, u) }), true);
+  }
+
+  /** 新しい端末に渡すリンク（QR）を作る。10 分で無効になる */
+  async createDeviceLink(origin: string) {
+    const id = toB64u(randomBytes(12));
+    const secret = randomBytes(32);
+    const exp = Date.now() + LINK_TTL_MS;
+    const u = await makeUnlock(this.account!.amk, this.me!, "link", id, await deriveKek(secret, "link"), exp);
+    await this.mutateDoc((d) => ({ unlocks: withUnlock(d, u) }), true);
+    const params = new URLSearchParams({ a: this.me!, u: id, k: toB64u(secret) });
+    return { id, exp, url: `${origin}/#/link?${params}` };
+  }
+
+  async cancelDeviceLink(id: string) {
+    await this.mutateDoc((d) => ({ unlocks: withUnlock(d, null, id) }));
+  }
+
+  /** この端末からアカウントを消す（サーバーのアカウントとグループはそのまま。接続先の設定は残す） */
+  async signOut() {
+    const endpoints = await this.endpoints();
+    const tx = this.db.transaction(["meta", "records", "keys", "cursors", "outbox", "blobs", "groups"], "readwrite");
+    for (const name of tx.objectStoreNames) await tx.objectStore(name).clear();
+    await tx.objectStore("meta").put(endpoints, "endpoints");
+    await tx.done;
+    this.account = null;
+    this.conn = null;
+    this.plain.clear();
     this.changed();
+  }
+
+  /** サーバーにある自分のグループを、この端末にも登録する（別の端末で参加したもの） */
+  private async adoptGroups(conn: Connection) {
+    const { groups } = await conn.api.myGroups();
+    for (const g of groups) {
+      if (g.dissolved || (await this.db.get("groups", g.group))) continue;
+      await this.db.put("groups", { group: g.group, addedAt: Date.now() });
+    }
   }
 
   async endpoints(): Promise<Endpoint[]> {
@@ -186,7 +416,7 @@ export class Engine extends EventTarget {
   }
 
   private async doSync() {
-    if (!this.device) return;
+    if (!this.account) return;
     try {
       const conn = await this.connect();
       if (!conn) {
@@ -194,6 +424,8 @@ export class Engine extends EventTarget {
         this.changed();
         return;
       }
+      await this.refreshAccount(conn);
+      await this.adoptGroups(conn);
       await this.flush(conn);
       for (const g of await this.db.getAll("groups")) {
         await this.pull(conn, g.group);
@@ -241,8 +473,11 @@ export class Engine extends EventTarget {
       try {
         page = await conn.api.getRecords(group, after);
       } catch (e) {
-        if (e instanceof ApiError && e.status === 403) return; // 参加手続き中、または退会済み
-        throw e;
+        if (!(e instanceof ApiError && e.status === 403)) throw e;
+        // 参加手続き中ならそのまま待つ。そうでなければ（別の端末で）退会済み
+        const g = await this.db.get("groups", group);
+        if (g && !g.joining && !(await this.db.getAll("outbox")).some((o) => o.group === group)) await this.forget(group);
+        return;
       }
       for (const env of page.records) {
         try {
@@ -309,7 +544,7 @@ export class Engine extends EventTarget {
     const hasMine = (kind: string) =>
       recs.some((r) => r.kind === kind && r.header.author === me && r.header.epoch === s.currentEpoch);
     if (!hasMine("profile") || !(await this.db.get("meta", `profile/${group}`))) {
-      await this.enqueue(group, [await setProfile(actor, s, key, { name: this.device!.name })]);
+      await this.enqueue(group, [await setProfile(actor, s, key, { name: this.name })]);
       await this.db.put("meta", true, `profile/${group}`);
     }
     if (isAdmin && s.settings.recordId && byId.get(s.settings.recordId)?.header.epoch !== s.currentEpoch) {
@@ -326,7 +561,7 @@ export class Engine extends EventTarget {
     await this.db.put("keys", g.key, `${g.group}/${g.epoch}`);
     await this.db.put("groups", { group: g.group, addedAt: Date.now() });
     const s = await deriveGroupState(g.group, g.records);
-    const profile = await setProfile(actor, s, g.key, { name: this.device!.name });
+    const profile = await setProfile(actor, s, g.key, { name: this.name });
     await this.db.put("meta", true, `profile/${g.group}`);
     await this.enqueue(g.group, [...g.records, profile]);
     void this.sync();
@@ -388,47 +623,74 @@ export class Engine extends EventTarget {
   }
 
   /** 撮影した動画を、選んだ各グループ向けに別々に暗号化して投稿する */
-  async post(groups: string[], video: Uint8Array<ArrayBuffer>, mime: string, durationMs: number, takenAt: number) {
+  async post(groups: string[], video: Uint8Array<ArrayBuffer>, mime: string, durationMs: number, takenAt: number, text?: string) {
     const actor = this.actor();
+    const t = text?.trim() || undefined;
     for (const group of groups) {
       const s = await this.state(group);
       const key = s.currentEpoch ? await this.key(group, s.currentEpoch) : null;
       if (!key) throw new Error("グループ鍵がまだありません");
       const blob = await encryptBlob(video);
-      const rec = await createPost(actor, s, key, blob.blobId, { ck: blob.ck, mime, durationMs, takenAt });
+      const rec = await createPost(actor, s, key, blob.blobId, { ck: blob.ck, mime, durationMs, takenAt, ...(t ? { text: t } : {}) });
       await this.enqueue(group, [rec], { id: blob.blobId, data: blob.sealed });
     }
     void this.sync();
   }
 
+  private async currentKey(group: string) {
+    const s = await this.state(group);
+    const key = s.currentEpoch ? await this.key(group, s.currentEpoch) : null;
+    if (!key) throw new Error("グループ鍵がまだありません");
+    return { s, key };
+  }
+
+  /** リアクション。同じ絵文字をもう一度押すと取り消す */
+  async react(post: PostView, emoji: string) {
+    const { s, key } = await this.currentKey(post.group);
+    const mine = post.reactions.find((r) => r.mine)?.emoji;
+    const ref = { id: post.id, author: post.author, exp: post.exp };
+    await this.enqueue(post.group, [await createReaction(this.actor(), s, key, ref, mine === emoji ? "" : emoji)]);
+    void this.sync();
+  }
+
+  async reply(post: PostView, text: string) {
+    const { s, key } = await this.currentKey(post.group);
+    const ref = { id: post.id, author: post.author, exp: post.exp };
+    await this.enqueue(post.group, [await createReply(this.actor(), s, key, ref, text.trim())]);
+    void this.sync();
+  }
+
   // ---------- 表示用 ----------
+
+  /** レコードの暗号文を開く。鍵がない・壊れているときは null */
+  private async open<T>(group: string, r: LocalRecord): Promise<T | null> {
+    if (this.plain.has(r.id)) return this.plain.get(r.id) as T;
+    const key = await this.key(group, r.header.epoch!);
+    if (!key) return null;
+    try {
+      const v = await openContent<T>(key, r.header);
+      this.plain.set(r.id, v);
+      return v;
+    } catch {
+      return null;
+    }
+  }
 
   async groupMeta(group: string, s?: GroupState): Promise<GroupMeta | null> {
     s ??= await this.state(group);
     if (!s.settings.recordId) return null;
     const r = await this.db.get("records", s.settings.recordId);
-    const key = r ? await this.key(group, r.header.epoch!) : null;
-    if (!r || !key) return null;
-    try {
-      return await openContent<GroupMeta>(key, r.header);
-    } catch {
-      return null;
-    }
+    return r ? this.open<GroupMeta>(group, r) : null;
   }
 
   private async profiles(group: string, recs: LocalRecord[]) {
     const names = new Map<string, { name: string; ts: number }>();
     for (const r of recs) {
       if (r.kind !== "profile") continue;
-      const key = await this.key(group, r.header.epoch!);
-      if (!key) continue;
-      try {
-        const p = await openContent<Profile>(key, r.header);
-        const cur = names.get(r.header.author);
-        if (!cur || cur.ts < r.ts) names.set(r.header.author, { name: p.name, ts: r.ts });
-      } catch {
-        // 読めないプロフィールは無視
-      }
+      const p = await this.open<Profile>(group, r);
+      if (!p) continue;
+      const cur = names.get(r.header.author);
+      if (!cur || cur.ts < r.ts) names.set(r.header.author, { name: p.name, ts: r.ts });
     }
     return names;
   }
@@ -466,20 +728,43 @@ export class Engine extends EventTarget {
   }
 
   async posts(group: string): Promise<PostView[]> {
-    const recs = await this.records(group);
+    const now = Date.now();
+    const recs = (await this.records(group)).filter((r) => (r.header.exp ?? Infinity) >= now);
     const names = await this.profiles(group, recs);
     const pending = new Set((await this.db.getAll("outbox")).map((o) => o.recordId));
+
+    // リアクションは作成者ごと・投稿ごとに最新の 1 つ。返信は全部
+    const reactions = new Map<string, Map<string, { emoji: string; ts: number; id: string }>>();
+    const replies = new Map<string, PostView["replies"]>();
+    for (const r of recs) {
+      if (r.kind === "reaction") {
+        const c = await this.open<ReactionContent>(group, r);
+        if (!c) continue;
+        const per = reactions.get(c.ref) ?? reactions.set(c.ref, new Map()).get(c.ref)!;
+        const cur = per.get(r.header.author);
+        if (!cur || cur.ts < r.ts || (cur.ts === r.ts && cur.id < r.id)) per.set(r.header.author, { emoji: c.emoji, ts: r.ts, id: r.id });
+      } else if (r.kind === "reply") {
+        const c = await this.open<ReplyContent>(group, r);
+        if (!c) continue;
+        (replies.get(c.ref) ?? replies.set(c.ref, []).get(c.ref)!).push({
+          id: r.id,
+          author: r.header.author,
+          authorName: names.get(r.header.author)?.name ?? null,
+          text: c.text,
+          ts: r.ts,
+        });
+      }
+    }
+
     const out: PostView[] = [];
     for (const r of recs) {
-      if (r.kind !== "post" || (r.header.exp ?? 0) < Date.now()) continue;
-      const key = await this.key(group, r.header.epoch!);
-      let content: PostContent | null = null;
-      if (key) {
-        try {
-          content = await openContent<PostContent>(key, r.header);
-        } catch {
-          content = null;
-        }
+      if (r.kind !== "post") continue;
+      const content = await this.open<PostContent>(group, r);
+      const counts = new Map<string, { count: number; mine: boolean }>();
+      for (const [author, x] of reactions.get(r.id) ?? []) {
+        if (!x.emoji) continue;
+        const c = counts.get(x.emoji) ?? { count: 0, mine: false };
+        counts.set(x.emoji, { count: c.count + 1, mine: c.mine || author === this.me });
       }
       out.push({
         id: r.id,
@@ -487,9 +772,12 @@ export class Engine extends EventTarget {
         author: r.header.author,
         authorName: names.get(r.header.author)?.name ?? null,
         ts: content?.takenAt ?? r.ts,
+        exp: r.header.exp!,
         blobId: r.header.blobs![0]!,
         content,
         pending: pending.has(r.id),
+        reactions: [...counts].map(([emoji, c]) => ({ emoji, ...c })).sort((x, y) => y.count - x.count),
+        replies: (replies.get(r.id) ?? []).sort((x, y) => x.ts - y.ts),
       });
     }
     return out.sort((a, b) => b.ts - a.ts);

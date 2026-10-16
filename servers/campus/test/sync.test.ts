@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  type AccountDoc,
+  ApiClient,
   type PostContent,
+  cryptoKeySigner,
+  deriveKek,
+  generateAccountSecret,
+  importAccountKeys,
+  makeUnlock,
+  newAmk,
+  openAccountDoc,
+  sealBundle,
+  signAccountDoc,
   createGroup,
   createInvite,
   createPost,
@@ -177,5 +188,30 @@ describe("peer database reset", () => {
     expect((await campus.store.controlRecords(h.group)).length).toBeGreaterThan(0);
     // 新しい CF には学内から元のグループが送り直されている
     expect((await cf.store.controlRecords(g.group)).length).toBe(2);
+  });
+  it("replicates account docs both ways, newest wins", async () => {
+    const { cf, campus, sync } = await setup();
+    const secret = await generateAccountSecret("たくま");
+    const keys = await importAccountKeys(secret);
+    const signer = cryptoKeySigner(keys.signPub, keys.sign.privateKey);
+    const amk = newAmk();
+    const base: AccountDoc = { v: 1, account: secret.signPub, ts: 1000, bundle: await sealBundle(amk, secret), unlocks: [] };
+    const atCampus = new ApiClient(campus.baseUrl, signer, campus.fetch);
+    const atCf = new ApiClient(cf.baseUrl, signer, cf.fetch);
+
+    // 学内で作ったアカウントを、学外の新しい端末が CF から取得できる
+    await atCampus.putAccount(await signAccountDoc(signer, base));
+    expect(await atCf.getAccount(secret.signPub)).toBeNull();
+    await sync.runOnce();
+    expect((await openAccountDoc(await atCf.getAccount(secret.signPub)))).toMatchObject({ ts: 1000 });
+
+    // CF 側でパスキーを追加 → 学内に戻る。学内の古い文書では上書きされない
+    const unlock = await makeUnlock(amk, secret.signPub, "passkey", "Y3JlZA", await deriveKek(randomBytes(32), "passkey"));
+    await atCf.putAccount(await signAccountDoc(signer, { ...base, ts: 2000, unlocks: [unlock] }));
+    await sync.runOnce();
+    await sync.runOnce();
+    for (const api of [atCampus, atCf]) {
+      expect((await openAccountDoc(await api.getAccount(secret.signPub))).unlocks.map((u) => u.id)).toEqual(["Y3JlZA"]);
+    }
   });
 });

@@ -3,8 +3,19 @@ import {
   ApiClient,
   ApiError,
   type Actor,
+  type AccountDoc,
   type PostContent,
   createGroup,
+  createReaction,
+  createReply,
+  deriveKek,
+  generateAccountSecret,
+  importAccountKeys,
+  makeUnlock,
+  newAmk,
+  openAccountDoc,
+  sealBundle,
+  signAccountDoc,
   createInvite,
   createPost,
   cryptoKeySigner,
@@ -120,6 +131,17 @@ export function conformance(name: string, target: () => Target) {
       await bob.api.uploadBlob(g.group, blob.blobId, blob.sealed);
       expect((await post(bob.api, g.group, p))[0]!.status).toBe("ok");
 
+      // リアクションと返信：メンバーなら送れる。期限は投稿より先にできない
+      const ref = { id: p.id, author: bob.signer.pub, exp: p.header.exp! };
+      const react = await createReaction(alice, s, g.key, ref, "🔥");
+      const reply = await createReply(carol, s, g.key, ref, "いいね");
+      expect((await post(alice.api, g.group, react))[0]!.status).toBe("ok");
+      expect((await post(carol.api, g.group, reply))[0]!.status).toBe("ok");
+      const tooLong = await createReaction(alice, s, g.key, { ...ref, exp: Date.now() + 30 * 24 * 3600_000 }, "👍");
+      expect((await post(alice.api, g.group, tooLong))[0]).toMatchObject({ status: "invalid" });
+      const outsider = await createReaction(mallory, s, g.key, ref, "👎");
+      expect((await post(mallory.api, g.group, outsider))[0]).toMatchObject({ status: "invalid" });
+
       // 別メンバーが受信・復号できる
       const recs = await allRecords(alice.api, g.group);
       const got = recs.find((r) => r.id === p.id)!;
@@ -145,6 +167,40 @@ export function conformance(name: string, target: () => Target) {
       s = await deriveGroupState(g.group, await allRecords(alice.api, g.group));
       const adminLeave = await leaveGroup(bob, s);
       expect((await post(bob.api, g.group, adminLeave))[0]).toMatchObject({ status: "invalid" });
+    });
+
+    it("stores account docs signed by the account and keeps the newest", async () => {
+      const t = target();
+      const f = t.fetch ?? fetch;
+      const secret = await generateAccountSecret("たくま");
+      const keys = await importAccountKeys(secret);
+      const signer = cryptoKeySigner(keys.signPub, keys.sign.privateKey);
+      const api = new ApiClient(t.baseUrl, signer, t.fetch);
+      const amk = newAmk();
+      const doc: AccountDoc = {
+        v: 1,
+        account: secret.signPub,
+        ts: Date.now(),
+        bundle: await sealBundle(amk, secret),
+        unlocks: [await makeUnlock(amk, secret.signPub, "passkey", "Y3JlZA", await deriveKek(randomBytes(32), "passkey"))],
+      };
+      expect(await api.getAccount(secret.signPub)).toBeNull();
+      await api.putAccount(await signAccountDoc(signer, doc));
+      expect((await openAccountDoc(await api.getAccount(secret.signPub))).ts).toBe(doc.ts);
+
+      // 古い ts は 409、同じ文書の再送は成功
+      await expect(api.putAccount(await signAccountDoc(signer, { ...doc, ts: doc.ts - 1 }))).rejects.toMatchObject({ status: 409 });
+      await api.putAccount(await signAccountDoc(signer, doc));
+      const newer = { ...doc, ts: doc.ts + 1, unlocks: [] };
+      await api.putAccount(await signAccountDoc(signer, newer));
+      expect((await openAccountDoc(await api.getAccount(secret.signPub))).unlocks).toEqual([]);
+
+      // 他人の鍵で署名したものは受け付けない
+      const other = await newDevice(t);
+      const forged = { payload: (await signAccountDoc(signer, { ...doc, ts: doc.ts + 2 })).payload, sig: (await signAccountDoc(signer, newer)).sig };
+      const res = await f(`${t.baseUrl}/v1/accounts`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(forged) });
+      expect(res.status).toBe(400);
+      await expect(other.api.getAccount("A".repeat(43))).resolves.toBeNull();
     });
 
     it("forbids peer endpoints to ordinary devices", async () => {

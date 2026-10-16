@@ -4,3 +4,4 @@ export * from "./record.ts";
 export * from "./membership.ts";
 export * from "./ops.ts";
 export * from "./client.ts";
+export * from "./account.ts";

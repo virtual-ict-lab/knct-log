@@ -55,12 +55,44 @@ registerDecoder(Vp9LevelFixDecoder);
 const WIDTH = 720;
 const HEIGHT = 1280;
 
+/** 再生時の .overlay-text と同じ見た目で、文字を中央に焼き込む */
+function drawOverlayText(ctx: OffscreenCanvasRenderingContext2D, text: string) {
+  const size = 56;
+  ctx.save();
+  ctx.font = `800 ${size}px system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // 幅に収まるように 1 文字ずつ折り返す（日本語は単語の区切りがないため）
+  const lines: string[] = [];
+  let line = "";
+  for (const ch of text) {
+    if (ctx.measureText(line + ch).width > WIDTH * 0.84 && line) {
+      lines.push(line);
+      line = ch;
+    } else line += ch;
+  }
+  lines.push(line);
+  const lh = size * 1.25;
+  const top = HEIGHT / 2 - ((lines.length - 1) * lh) / 2;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.fillStyle = "#fff";
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 12;
+  lines.forEach((l, k) => {
+    ctx.strokeText(l, WIDTH / 2, top + k * lh);
+    ctx.fillText(l, WIDTH / 2, top + k * lh);
+  });
+  ctx.restore();
+}
+
 /**
  * 端末上でクリップを連結して 1 本の mp4 にする。
  * 解像度と向きがクリップごとに違っても、縦長 720x1280 にそろえて再エンコードする。
  */
-export async function makeVlog(clips: Blob[], onProgress?: (done: number, total: number) => void): Promise<Blob> {
-  const inputs = clips.map((c) => new Input({ source: new BlobSource(c), formats: ALL_FORMATS }));
+export async function makeVlog(clips: { video: Blob; text?: string }[], onProgress?: (done: number, total: number) => void): Promise<Blob> {
+  const inputs = clips.map((c) => new Input({ source: new BlobSource(c.video), formats: ALL_FORMATS }));
   try {
     const tracks = await Promise.all(
       inputs.map(async (input) => {
@@ -99,6 +131,8 @@ export async function makeVlog(clips: Blob[], onProgress?: (done: number, total:
           ctx.fillStyle = "#000";
           ctx.fillRect(0, 0, WIDTH, HEIGHT);
           ctx.drawImage(frame.canvas, 0, 0);
+          const text = clips[i]!.text;
+          if (text) drawOverlayText(ctx, text);
           const ts = frame.timestamp - first;
           await videoSource.add(offset + ts, frame.duration);
           end = Math.max(end, ts + frame.duration);

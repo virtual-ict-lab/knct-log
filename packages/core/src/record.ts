@@ -18,7 +18,9 @@ export const CONTROL_KINDS = [
   "admin.transfer",
   "key.rotate",
 ] as const;
-export const CONTENT_KINDS = ["key.wrap", "profile", "post"] as const;
+export const CONTENT_KINDS = ["key.wrap", "profile", "post", "reaction", "reply"] as const;
+/** 7 日で消える kind（exp 必須） */
+export const EPHEMERAL_KINDS = ["post", "reaction", "reply"] as const;
 export type ControlKind = (typeof CONTROL_KINDS)[number];
 export type ContentKind = (typeof CONTENT_KINDS)[number];
 export type Kind = ControlKind | ContentKind;
@@ -90,6 +92,9 @@ const BODY: Record<Kind, { body: BodyCheck; ct: boolean; epoch: boolean }> = {
   "key.wrap": { body: (b) => isKey(b.to) && isB64u(b.enc, 64) && isB64u(b.ct, 128), ct: false, epoch: true },
   profile: { body: () => true, ct: true, epoch: true },
   post: { body: () => true, ct: true, epoch: true },
+  // to = 反応先の投稿の作成者（通知の宛先にだけ使う）。どの投稿かは ct の中
+  reaction: { body: (b) => isKey(b.to), ct: true, epoch: true },
+  reply: { body: (b) => isKey(b.to), ct: true, epoch: true },
 };
 
 export function validateHeader(h: unknown): asserts h is Header {
@@ -114,6 +119,8 @@ export function validateHeader(h: unknown): asserts h is Header {
   if (!spec.body((r.body ?? {}) as Record<string, unknown>)) fail(`invalid body for ${r.kind as string}`);
   if (r.kind === "post" && (!Array.isArray(r.blobs) || r.blobs.length === 0 || r.exp === undefined))
     fail("post requires blobs and exp");
+  if ((r.kind === "reaction" || r.kind === "reply") && (r.exp === undefined || r.blobs !== undefined))
+    fail(`${r.kind} requires exp and no blobs`);
 }
 
 export async function recordId(payload: Uint8Array<ArrayBuffer>): Promise<string> {

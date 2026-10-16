@@ -4,7 +4,8 @@ import { AUTH_CONTEXT, fromB64u, isGroupId, sha256, toB64u, utf8, verify } from 
 import type { Deps } from "./deps.ts";
 import { hmac, hmacVerify, seal, unseal } from "./hmac.ts";
 import { BLOB_GRACE_MS, Store } from "./store.ts";
-import { notifyNewPost, pushRoutes } from "./push.ts";
+import { notifyNewPost, notifyReaction, pushRoutes } from "./push.ts";
+import { accountRoutes } from "./accounts.ts";
 
 export const MAX_BLOB_BYTES = 8 * 1024 * 1024;
 const TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -107,7 +108,9 @@ export function createApp(deps: Deps) {
     const { records } = await c.req.json<{ records: unknown[] }>();
     if (!Array.isArray(records) || records.length > MAX_BATCH) return c.json({ error: "bad request" }, 400);
     const results = await store.ingestDirect(gid, c.get("pk"), records, (h, id) => {
-      if (h.kind === "post" && deps.pusher) deps.defer?.(notifyNewPost(deps, store, h, id));
+      if (!deps.pusher) return;
+      if (h.kind === "post") deps.defer?.(notifyNewPost(deps, store, h, id));
+      if (h.kind === "reaction" || h.kind === "reply") deps.defer?.(notifyReaction(deps, store, h));
     });
     return c.json({ results });
   });
@@ -165,6 +168,7 @@ export function createApp(deps: Deps) {
   });
 
   pushRoutes(authed, deps, store);
+  accountRoutes(app, authed, store);
   app.route("/v1", authed);
   return { app, store };
 }

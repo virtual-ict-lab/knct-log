@@ -1,13 +1,17 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
-import type { Envelope, Header } from "@knct-log/core";
+import type { DeviceKeys, Envelope, Header } from "@knct-log/core";
 
-export interface StoredDevice {
-  sign: CryptoKeyPair;
-  kx: CryptoKeyPair;
-  signPub: string;
-  kxPub: string;
+/** この端末に取り込んだアカウント。秘密鍵は non-extractable の CryptoKey */
+export interface StoredAccount {
+  keys: DeviceKeys;
   name: string;
-  createdAt: number;
+  /** bundle とロック解除手段を開く鍵。名前の変更やパスキー・端末の追加に使う */
+  amk: Uint8Array<ArrayBuffer>;
+  /** 手元にある最新のアカウント文書 */
+  doc: Envelope;
+  docTs: number;
+  /** サーバーに未送信の変更がある */
+  dirty: boolean;
 }
 
 export interface Endpoint {
@@ -53,8 +57,12 @@ interface Schema extends DBSchema {
 export type DB = IDBPDatabase<Schema>;
 
 export function openLocalDb(name = "knct-log"): Promise<DB> {
-  return openDB<Schema>(name, 1, {
-    upgrade(db) {
+  return openDB<Schema>(name, 2, {
+    upgrade(db, oldVersion) {
+      if (oldVersion === 1) {
+        // v1 は端末ごとの鍵だった。アカウントへ移行できないので作り直す
+        for (const s of [...db.objectStoreNames]) db.deleteObjectStore(s);
+      }
       db.createObjectStore("meta");
       db.createObjectStore("records", { keyPath: "id" }).createIndex("group", "group");
       db.createObjectStore("keys");
