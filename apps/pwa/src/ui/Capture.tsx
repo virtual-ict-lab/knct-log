@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Send, SwitchCamera, Type, X } from "lucide-react";
+import { Check, Send, SwitchCamera, X } from "lucide-react";
 import { MAX_POST_TEXT } from "@knct-log/core";
 import { Avatar, ErrorNote, IconButton, Spinner } from "./common.tsx";
 import { TextOverlay } from "./GroupPage.tsx";
 import { go, useEngine, useLive } from "./hooks.ts";
+import "./capture.css";
 
 const CLIP_MS = 3000;
 const MIME_CANDIDATES = [
@@ -21,8 +22,8 @@ function pickMime() {
 type Clip = { bytes: Uint8Array<ArrayBuffer>; mime: string; url: string; takenAt: number };
 
 /**
- * 3 秒固定・撮り直しなし。撮ったら文字を入れるかどうかだけ選んで送る。
- * 撮り終えたあとは閉じるボタンを出さない（撮り直しの代わりにならないように）。
+ * 3 秒固定。撮った直後に動画の中央へ文字入力（フォーカス済み）を出す。
+ * 送信前のキャンセルは破棄してカメラに戻る（何度でも撮り直せる）。
  */
 export function Capture({ preselect }: { preselect: string | null }) {
   const engine = useEngine();
@@ -37,9 +38,9 @@ export function Capture({ preselect }: { preselect: string | null }) {
   const [progress, setProgress] = useState(0);
   const [clip, setClip] = useState<Clip | null>(null);
   const [text, setText] = useState("");
-  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
@@ -94,14 +95,28 @@ export function Capture({ preselect }: { preselect: string | null }) {
     setPhase("review");
   }
 
+  function retake() {
+    setClip(null);
+    setText("");
+    setError(null);
+    setProgress(0);
+    setPhase("preview");
+  }
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = "0";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text, phase]);
+
   async function send() {
     if (!clip || !targets?.size) return;
     setPhase("sending");
-    setEditing(false);
     try {
       await engine.post([...targets], clip.bytes, clip.mime, CLIP_MS, clip.takenAt, text);
       setPhase("done");
-      setTimeout(() => go(targets.size === 1 ? `/g/${[...targets][0]}` : "/"), 600);
+      setTimeout(() => go(back), 600);
     } catch (e) {
       setError((e as Error).message);
       setPhase("review");
@@ -114,34 +129,36 @@ export function Capture({ preselect }: { preselect: string | null }) {
 
   return (
     <div className="fullscreen dark capture">
-      <div className="viewfinder" onClick={() => phase === "review" && !editing && setEditing(true)}>
+      <div className="viewfinder" onClick={() => phase === "review" && textRef.current?.focus()}>
         {phase === "review" || phase === "sending" || phase === "done" ? (
           <video key="clip" src={clip?.url} autoPlay loop playsInline />
         ) : (
           <video key="live" ref={videoRef} autoPlay playsInline muted className={facing === "user" ? "mirror" : ""} />
         )}
-        {editing ? (
-          <input
+        {phase === "review" ? (
+          <textarea
+            ref={textRef}
             className="overlay-text editing"
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            onBlur={() => setEditing(false)}
-            onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
+            rows={1}
+            onChange={(e) => setText(e.target.value.replace(/\n/g, ""))}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
             maxLength={MAX_POST_TEXT}
             autoFocus
             aria-label="文字"
           />
         ) : (
-          phase !== "preview" && phase !== "recording" && <TextOverlay text={text.trim()} />
+          (phase === "sending" || phase === "done") && <TextOverlay text={text.trim()} />
         )}
         {phase === "sending" && <div className="center-badge"><Spinner size={40} /></div>}
         {phase === "done" && <div className="center-badge"><Check size={48} /></div>}
       </div>
 
       <div className="top-controls">
-        {phase === "preview" ? <IconButton icon={X} label="閉じる" variant="soft" onClick={() => go(back)} /> : <span />}
+        {phase === "preview" && <IconButton icon={X} label="閉じる" variant="soft" onClick={() => go(back)} />}
+        {phase === "review" && <IconButton icon={X} label="キャンセル" variant="soft" onClick={retake} />}
+        {phase !== "preview" && phase !== "review" && <span />}
         {phase === "preview" && <IconButton icon={SwitchCamera} label="カメラ切り替え" variant="soft" onClick={() => setFacing(facing === "user" ? "environment" : "user")} />}
-        {phase === "review" && <IconButton icon={Type} label="文字を入れる" variant="soft" onClick={() => setEditing(true)} />}
       </div>
 
       <div className="bottom-controls">
@@ -154,7 +171,7 @@ export function Capture({ preselect }: { preselect: string | null }) {
                 <button
                   key={g.group}
                   className={`target ${on ? "on" : ""}`}
-                  disabled={g.posted || phase !== "preview"}
+                  disabled={g.posted || (phase !== "preview" && phase !== "review")}
                   aria-pressed={on}
                   title={g.name ?? ""}
                   onClick={() => {
