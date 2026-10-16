@@ -14,18 +14,21 @@ export function IconButton(props: {
   size?: number;
   busy?: boolean;
   type?: "button" | "submit";
+  /** アイコンの横に出す短い文字。意味が伝わりにくい操作にだけ付ける */
+  text?: string;
 }) {
   const { icon: I, label, variant = "plain", size = 22 } = props;
   return (
     <button
       type={props.type ?? "button"}
-      className={`icon-btn ${variant}`}
+      className={`icon-btn ${variant}${props.text ? " with-text" : ""}`}
       aria-label={label}
       title={label}
       disabled={props.disabled || props.busy}
       onClick={props.onClick}
     >
       {props.busy ? <LoaderCircle size={size} className="spin" /> : <I size={size} />}
+      {props.text && <span>{props.text}</span>}
     </button>
   );
 }
