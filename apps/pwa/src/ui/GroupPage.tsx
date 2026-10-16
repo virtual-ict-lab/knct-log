@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, Copy, Film, Hourglass, KeyRound, Lock, MessageCircle, Plus, Send, Settings, Share2, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { Camera, CalendarDays, Check, Copy, Film, Hourglass, KeyRound, LayoutGrid, Lock, MessageCircle, Plus, Send, Settings, Share2, UserPlus, Volume2, VolumeX } from "lucide-react";
 import { MAX_REPLY_TEXT } from "@knct-log/core";
 import type { PostView } from "../lib/engine.ts";
 import { Screen } from "./Layout.tsx";
 import { VlogDialog } from "./VlogDialog.tsx";
+import { CalendarSheet } from "./CalendarSheet.tsx";
+import { TalkView } from "./TalkView.tsx";
 import { Avatar, ErrorNote, IconButton, QUICK_EMOJIS, Qr, Sheet, Spinner, useAction, useFlash } from "./common.tsx";
 import { dayKey, formatDay, formatTime, go, useEngine, useLive } from "./hooks.ts";
+
+const VIEW_KEY = "knct-log:group-view";
+function loadMode(): "grid" | "talk" {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "talk" ? "talk" : "grid";
+  } catch {
+    return "grid";
+  }
+}
 
 export function GroupPage({ group }: { group: string }) {
   const view = useLive((e) => e.groupView(group), [group]);
@@ -14,6 +25,24 @@ export function GroupPage({ group }: { group: string }) {
   const [vlogDay, setVlogDay] = useState<PostView[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [mode, setMode] = useState(loadMode);
+  const [calendar, setCalendar] = useState(false);
+  const [jump, setJump] = useState<string | null>(null);
+  const switchMode = () => {
+    const next = mode === "grid" ? "talk" : "grid";
+    setMode(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* 保存できなくても動く */
+    }
+  };
+  // カレンダーで選んだ日へスクロール
+  useEffect(() => {
+    if (!jump) return;
+    document.querySelector(`[data-day="${jump}"]`)?.scrollIntoView({ block: "start" });
+    setJump(null);
+  }, [jump, mode, posts]);
 
   const days = useMemo(() => {
     const m = new Map<string, PostView[]>();
@@ -32,6 +61,8 @@ export function GroupPage({ group }: { group: string }) {
       actions={
         view.isMember && (
           <>
+            <IconButton icon={CalendarDays} label="カレンダー" onClick={() => setCalendar(true)} />
+            <IconButton icon={mode === "grid" ? MessageCircle : LayoutGrid} label={mode === "grid" ? "トーク表示" : "一覧表示"} onClick={switchMode} />
             {ready && view.members.length < 12 && <IconButton icon={UserPlus} label="招待" onClick={() => setInviting(true)} />}
             <IconButton icon={Settings} label="グループ設定" onClick={() => go(`/g/${group}/settings`)} />
           </>
@@ -46,8 +77,9 @@ export function GroupPage({ group }: { group: string }) {
         <Waiting icon={<KeyRound size={36} />} label="鍵の受け取り待ち" />
       ) : null}
 
-      {days.map((day) => (
-        <section key={dayKey(day[0]!.ts)} className="day">
+      {mode === "talk" && posts && <TalkView posts={posts} members={view.members} onOpen={setOpenId} />}
+      {mode === "grid" && days.map((day) => (
+        <section key={dayKey(day[0]!.ts)} className="day" data-day={dayKey(day[0]!.ts)}>
           <div className="day-head">
             <h2>{formatDay(day[0]!.ts)}</h2>
             <IconButton icon={Film} label="まとめる" disabled={!day.some((p) => p.content)} onClick={() => setVlogDay(day)} />
@@ -67,6 +99,16 @@ export function GroupPage({ group }: { group: string }) {
       )}
       {vlogDay && <VlogDialog posts={vlogDay} onClose={() => setVlogDay(null)} />}
       {open && <ClipSheet post={open} onClose={() => setOpenId(null)} />}
+      {calendar && posts && (
+        <CalendarSheet
+          posts={posts}
+          onClose={() => setCalendar(false)}
+          onPick={(k) => {
+            setCalendar(false);
+            setJump(k);
+          }}
+        />
+      )}
       {inviting && <InviteSheet group={group} name={view.name} onClose={() => setInviting(false)} />}
     </Screen>
   );
@@ -81,7 +123,7 @@ function Waiting({ icon, label }: { icon: React.ReactNode; label: string }) {
 }
 
 /** 復号した動画の URL。画面に入ってから取得する */
-function useClipUrl(post: PostView, eager = false) {
+export function useClipUrl(post: PostView, eager = false) {
   const engine = useEngine();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
