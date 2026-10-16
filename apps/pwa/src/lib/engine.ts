@@ -644,12 +644,17 @@ export class Engine extends EventTarget {
     return { s, key };
   }
 
+  private lastReactionTs = 0;
+
   /** リアクション。同じ絵文字をもう一度押すと取り消す */
   async react(post: PostView, emoji: string) {
     const { s, key } = await this.currentKey(post.group);
     const mine = post.reactions.find((r) => r.mine)?.emoji;
     const ref = { id: post.id, author: post.author, exp: post.exp };
-    await this.enqueue(post.group, [await createReaction(this.actor(), s, key, ref, mine === emoji ? "" : emoji)]);
+    // 同じミリ秒に続けて押すと ts が並び、どちらが有効かが ID 次第になるので単調に増やす
+    const ts = Math.max(Date.now(), this.lastReactionTs + 1);
+    this.lastReactionTs = ts;
+    await this.enqueue(post.group, [await createReaction(this.actor(), s, key, ref, mine === emoji ? "" : emoji, ts)]);
     void this.sync();
   }
 
