@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, Send, SwitchCamera, X } from "lucide-react";
 import { MAX_POST_TEXT } from "@knct-log/core";
 import { Avatar, ErrorNote, IconButton, Spinner } from "./common.tsx";
@@ -19,7 +19,20 @@ function pickMime() {
   return MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
 }
 
-type Clip = { bytes: Uint8Array<ArrayBuffer>; mime: string; url: string; takenAt: number };
+type Clip = { bytes: Uint8Array<ArrayBuffer>; mime: string; url: string; takenAt: number; size?: { w: number; h: number } };
+
+const LANDSCAPE = "(orientation: landscape)";
+/** 端末（画面）が横向きか。回転に合わせて縦動画と横動画を切り替える */
+function useLandscape() {
+  return useSyncExternalStore(
+    (cb) => {
+      const q = matchMedia(LANDSCAPE);
+      q.addEventListener("change", cb);
+      return () => q.removeEventListener("change", cb);
+    },
+    () => matchMedia(LANDSCAPE).matches,
+  );
+}
 
 /**
  * 3 秒固定。撮った直後に動画の中央へ文字入力（フォーカス済み）を出す。
@@ -42,6 +55,7 @@ export function Capture({ preselect }: { preselect: string | null }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const landscape = useLandscape();
 
   useEffect(() => {
     if (!groups || targets) return;
@@ -54,7 +68,12 @@ export function Capture({ preselect }: { preselect: string | null }) {
     let cancelled = false;
     navigator.mediaDevices
       ?.getUserMedia({
-        video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: { ideal: 30 } },
+        video: {
+          facingMode: facing,
+          width: { ideal: landscape ? 1280 : 720 },
+          height: { ideal: landscape ? 720 : 1280 },
+          frameRate: { ideal: 30 },
+        },
         audio: true,
       })
       .then((stream) => {
@@ -67,10 +86,12 @@ export function Capture({ preselect }: { preselect: string | null }) {
     return () => {
       cancelled = true;
     };
-  }, [facing, phase]);
+  }, [facing, phase, landscape]);
 
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
-  useEffect(() => () => void (clip && URL.revokeObjectURL(clip.url)), [clip]);
+  // 大きさを書き足しても同じ URL のまま使うので、URL が変わったときだけ解放する
+  const clipUrl = clip?.url;
+  useEffect(() => () => void (clipUrl && URL.revokeObjectURL(clipUrl)), [clipUrl]);
 
   async function record() {
     const stream = streamRef.current;
@@ -114,7 +135,7 @@ export function Capture({ preselect }: { preselect: string | null }) {
     if (!clip || !targets?.size) return;
     setPhase("sending");
     try {
-      await engine.post([...targets], clip.bytes, clip.mime, CLIP_MS, clip.takenAt, text);
+      await engine.post([...targets], clip.bytes, clip.mime, CLIP_MS, clip.takenAt, text, clip.size);
       setPhase("done");
       setTimeout(() => go(back), 600);
     } catch (e) {
@@ -131,7 +152,17 @@ export function Capture({ preselect }: { preselect: string | null }) {
     <div className="fullscreen dark capture">
       <div className="viewfinder" onClick={() => phase === "review" && textRef.current?.focus()}>
         {phase === "review" || phase === "sending" || phase === "done" ? (
-          <video key="clip" src={clip?.url} autoPlay loop playsInline />
+          <video
+            key="clip"
+            src={clip?.url}
+            autoPlay
+            loop
+            playsInline
+            onLoadedMetadata={(e) => {
+              const { videoWidth: w, videoHeight: h } = e.currentTarget;
+              if (w && h) setClip((c) => c && { ...c, size: { w, h } });
+            }}
+          />
         ) : (
           <video key="live" ref={videoRef} autoPlay playsInline muted className={facing === "user" ? "mirror" : ""} />
         )}

@@ -204,11 +204,7 @@ details.card > .small { margin-bottom: 8px; }
 
 /* ---- グループ ---- */
 .waiting { display: grid; place-items: center; padding: 48px 0; color: var(--muted); }
-.day { display: flex; flex-direction: column; gap: 8px; }
-.day-head { display: flex; align-items: center; justify-content: space-between; }
-.day-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.clip { position: relative; aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden; background: #000; cursor: pointer; container-type: inline-size; }
+.clip { position: relative; aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden; background: #000; cursor: pointer; container-type: size; }
 .clip video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .clip-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #888; }
 .clip-meta {
@@ -223,10 +219,10 @@ details.card > .small { margin-bottom: 8px; }
 .clip-reactions span.mine { background: rgb(255 90 60 / 0.75); }
 .clip-reactions small { font-size: 11px; }
 
-/* 動画の中央の文字（Vlog でも同じ見た目で焼き込む） */
+/* 動画の中央の文字（Vlog でも同じ見た目で焼き込む）。横長の動画では高さに合わせて小さくする */
 .overlay-text {
   position: absolute; left: 8%; right: 8%; top: 50%; transform: translateY(-50%);
-  text-align: center; color: #fff; font-weight: 800; font-size: 9cqw; line-height: 1.25; word-break: break-all;
+  text-align: center; color: #fff; font-weight: 800; font-size: min(9cqw, 8cqh); line-height: 1.25; word-break: break-all;
   text-shadow: 0 0 2px rgb(0 0 0 / 0.6), 0 2px 12px rgb(0 0 0 / 0.5); pointer-events: none;
 }
 .overlay-text.editing {
@@ -234,7 +230,7 @@ details.card > .small { margin-bottom: 8px; }
   border-bottom: 2px dashed rgb(255 255 255 / 0.7); border-radius: 0; caret-color: var(--accent);
 }
 
-.clip-large { position: relative; aspect-ratio: 9 / 16; max-height: 62dvh; margin: 0 auto; width: 100%; border-radius: 18px; overflow: hidden; background: #000; container-type: inline-size; }
+.clip-large { position: relative; aspect-ratio: 9 / 16; max-height: 62dvh; margin: 0 auto; width: 100%; border-radius: 18px; overflow: hidden; background: #000; container-type: size; }
 .clip-large video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .clip-large .clip-meta { justify-content: flex-start; font-size: 14px; }
 .clip-large .muted { color: rgb(255 255 255 / 0.7); }
@@ -264,10 +260,9 @@ details.card > .small { margin-bottom: 8px; }
 /* ---- 撮影 ---- */
 .fullscreen { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; }
 .fullscreen.dark { background: #000; color: #fff; }
-.viewfinder { position: absolute; inset: 0; container-type: inline-size; }
+.viewfinder { position: absolute; inset: 0; container-type: size; }
 .viewfinder video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .viewfinder video.mirror { transform: scaleX(-1); }
-.capture .overlay-text { font-size: 9cqw; }
 .center-badge { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.35); }
 .top-controls {
   position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
@@ -297,6 +292,15 @@ details.card > .small { margin-bottom: 8px; }
 .target.on { opacity: 1; box-shadow: 0 0 0 3px var(--accent); }
 .target:disabled { opacity: 0.25; }
 .target-done { position: absolute; right: -2px; bottom: -2px; background: var(--ok); border-radius: 999px; color: #fff; padding: 1px; }
+/* 横向きで撮るときは、ボタンを右側に縦に並べて画面を広く使う */
+@media (orientation: landscape) and (max-height: 560px) {
+  .bottom-controls {
+    left: auto; top: 0; flex-direction: row; justify-content: flex-end; gap: 12px;
+    padding: 12px calc(16px + env(safe-area-inset-right)) 12px 32px; background: linear-gradient(to right, transparent, rgb(0 0 0 / 0.5));
+  }
+  .bottom-controls .targets { flex-direction: column; flex-wrap: wrap; max-height: 100%; }
+  .top-controls { padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(124px + env(safe-area-inset-right)); }
+}
 
 /* QR の読み取り */
 .scanner-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

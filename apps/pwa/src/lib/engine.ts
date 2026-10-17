@@ -651,7 +651,7 @@ export class Engine extends EventTarget {
   }
 
   /** 撮影した動画を、選んだ各グループ向けに別々に暗号化して投稿する */
-  async post(groups: string[], video: Uint8Array<ArrayBuffer>, mime: string, durationMs: number, takenAt: number, text?: string) {
+  async post(groups: string[], video: Uint8Array<ArrayBuffer>, mime: string, durationMs: number, takenAt: number, text?: string, size?: { w: number; h: number }) {
     const actor = this.actor();
     const t = text?.trim() || undefined;
     for (const group of groups) {
@@ -659,7 +659,7 @@ export class Engine extends EventTarget {
       const key = s.currentEpoch ? await this.key(group, s.currentEpoch) : null;
       if (!key) throw new Error("グループ鍵がまだありません");
       const blob = await encryptBlob(video);
-      const rec = await createPost(actor, s, key, blob.blobId, { ck: blob.ck, mime, durationMs, takenAt, ...(t ? { text: t } : {}) });
+      const rec = await createPost(actor, s, key, blob.blobId, { ck: blob.ck, mime, durationMs, takenAt, ...(t ? { text: t } : {}), ...(size ?? {}) });
       await this.enqueue(group, [rec], { id: blob.blobId, data: blob.sealed });
     }
     void this.sync();

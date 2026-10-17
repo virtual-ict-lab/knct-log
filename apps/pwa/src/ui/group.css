@@ -10,6 +10,7 @@
 .msg.mine .msg-row { flex-direction: row-reverse; }
 .msg-time { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .talk .clip { width: min(210px, 56vw); }
+.talk .clip.landscape { width: min(300px, 64vw); }
 .bubble { padding: 8px 12px; border-radius: 18px; background: var(--surface); line-height: 1.4; overflow-wrap: anywhere; }
 .msg.mine .bubble { background: var(--accent); color: var(--accent-text); }
 .quote { display: flex; align-items: center; gap: 6px; border: 0; padding: 0; margin: 0 0 2px; background: none; color: var(--muted); font-size: 12px; max-width: 100%; }
@@ -20,7 +21,26 @@
 .talk-reactions span { background: var(--surface); border-radius: 999px; padding: 1px 7px; font-size: 13px; display: inline-flex; gap: 3px; align-items: center; }
 .talk-reactions span.mine { background: color-mix(in srgb, var(--accent) 25%, var(--surface)); }
 .talk-reactions small { font-size: 11px; }
-.day { scroll-margin-top: 64px; }
+
+/* ---- 1 時間ごとのページ ---- */
+.hour-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: -10px; }
+.hour-label { display: flex; align-items: baseline; gap: 10px; }
+.hour-label h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.hour-label span { font-size: 22px; font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.hour-dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; margin: -6px 0; }
+.hour-dots button { width: 18px; height: 18px; border: 0; padding: 0; background: none; display: grid; place-items: center; }
+.hour-dots button::after { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--line); transition: transform 0.15s, background 0.15s; }
+.hour-dots button.on::after { background: var(--text); transform: scale(1.4); }
+.hour-pager {
+  display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain; scrollbar-width: none;
+}
+.hour-pager::-webkit-scrollbar { display: none; }
+.hour-page { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-top: 64px; }
+.hour-grid { display: flex; flex-direction: column; gap: 4px; }
+.hour-row { display: flex; gap: 4px; }
+.hour-row .clip { aspect-ratio: auto; flex: 1 1 0; min-width: 0; height: 100%; border-radius: 10px; }
+.hour-row .clip-meta { padding: 16px 6px 5px; }
 
 /* ---- カレンダー ---- */
 .cal-head { display: flex; align-items: center; justify-content: space-between; }
