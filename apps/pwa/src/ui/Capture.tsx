@@ -108,6 +108,17 @@ export function Capture({ preselect }: { preselect: string | null }) {
   }, [facing, phase]);
 
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
+  // スマホでは全画面にして、横にしたときにブラウザのバーを出さずに画面いっぱいで撮れるようにする
+  // （撮影ボタンを押した直後なので許可される。iPhone のように使えない端末ではそのまま）
+  useEffect(() => {
+    const el = document.documentElement;
+    if (!matchMedia("(pointer: coarse)").matches || document.fullscreenElement || !el.requestFullscreen) return;
+    let entered = false;
+    el.requestFullscreen({ navigationUI: "hide" }).then(() => (entered = true), () => {});
+    return () => {
+      if (entered && document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    };
+  }, []);
   useEffect(() => () => void (clip && URL.revokeObjectURL(clip.url)), [clip]);
 
   async function record() {

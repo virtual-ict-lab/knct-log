@@ -1,5 +1,11 @@
 .capture .top-controls { min-height: 68px; }
-/* 横動画だけを撮る。画面の中に 16:9 の枠を置き、その範囲を切り抜いて録る */
+/* キーボードが出ているときは、見えている範囲（--vv-*）の中に収めて文字入力を隠さない */
+.fullscreen.capture { top: var(--vv-top, 0); bottom: auto; height: var(--vv-height, 100dvh); container-type: size; }
+/* 横動画だけを撮る。縦向きでは画面の中に 16:9 の枠を置き、その範囲を切り抜いて録る */
 .capture .viewfinder {
-  inset: 0; margin: auto; width: min(100vw, 100dvh * 16 / 9); height: min(100dvh, 100vw * 9 / 16);
+  inset: 0; margin: auto; width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16);
+}
+/* スマホを横にしたら画面いっぱいに映す（録るのは中央の 16:9） */
+@media (orientation: landscape) and (pointer: coarse) {
+  .capture .viewfinder { width: 100%; height: 100%; }
 }

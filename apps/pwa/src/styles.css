@@ -44,6 +44,8 @@ input, select {
   background: var(--bg); min-height: 44px; outline-color: var(--accent);
 }
 select { width: auto; }
+/* キーボードの上に余白を持ってスクロールする（lib/keyboard.ts） */
+input, textarea { scroll-margin: 24px 0 32px; }
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
@@ -165,9 +167,10 @@ details.card > .small { margin-bottom: 8px; }
 .progress span { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
 
 /* ---- シート（下から出る） ---- */
-.sheet-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.5); display: grid; place-items: end center; z-index: 20; animation: fade 0.15s; }
+/* キーボードが出ているときは、見えている範囲（--vv-*）の中に収める */
+.sheet-backdrop { position: fixed; inset: 0; top: var(--vv-top, 0); bottom: auto; height: var(--vv-height, 100dvh); background: rgb(0 0 0 / 0.5); display: grid; place-items: end center; z-index: 20; animation: fade 0.15s; }
 .sheet {
-  background: var(--surface); width: 100%; max-width: 640px; max-height: 92dvh; overflow: auto;
+  background: var(--surface); width: 100%; max-width: 640px; max-height: 92%; overflow: auto; overscroll-behavior: contain;
   border-radius: 24px 24px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; gap: 14px; animation: rise 0.2s ease-out;
 }
