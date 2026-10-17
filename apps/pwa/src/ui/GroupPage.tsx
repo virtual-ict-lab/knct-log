@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CalendarDays, Check, Copy, Hourglass, KeyRound, LayoutGrid, Lock, MessageCircle, Plus, Send, Settings, Share2, UserPlus, Volume2, VolumeX } from "lucide-react";
-import { MAX_REPLY_TEXT } from "@knct-log/core";
+import { Camera, CalendarDays, Check, Copy, Hourglass, KeyRound, LayoutGrid, Lock, MessageCircle, Pencil, Plus, Send, Settings, Share2, Trash2, UserPlus, Volume2, VolumeX, X } from "lucide-react";
+import { MAX_POST_TEXT, MAX_REPLY_TEXT } from "@knct-log/core";
 import type { PostView } from "../lib/engine.ts";
 import { Screen } from "./Layout.tsx";
 import { VlogDialog } from "./VlogDialog.tsx";
@@ -148,14 +148,23 @@ export function useClipUrl(post: PostView, eager = false) {
   return { url, failed, ref };
 }
 
+/** 文字入力の高さを中身に合わせる（折り返しても表示時と同じ見た目にする） */
+function fitHeight(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "0";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 export function TextOverlay({ text }: { text?: string }) {
   if (!text) return null;
   return <div className="overlay-text">{text}</div>;
 }
 
-/** 1 本を大きく見る。リアクションと返信 */
+/** 1 本を大きく見る。リアクションと返信。自分の投稿は文字の変更と削除 */
 function ClipSheet({ post, onClose }: { post: PostView; onClose: () => void }) {
   const engine = useEngine();
+  const mine = post.author === engine.me;
+  const [editing, setEditing] = useState<string | null>(null);
   const { url, failed } = useClipUrl(post, true);
   const [aspect, setAspect] = useState(() => aspectOf(post));
   const [muted, setMuted] = useState(false);
@@ -163,6 +172,19 @@ function ClipSheet({ post, onClose }: { post: PostView; onClose: () => void }) {
   const [custom, setCustom] = useState<string | null>(null);
   const { busy, error, run } = useAction();
   const canAct = !!post.content && !post.pending;
+
+  const saveText = () => {
+    const text = editing?.trim() ?? "";
+    setEditing(null);
+    if (text !== (post.content?.text ?? "")) void run("edit", () => engine.editText(post, text))();
+  };
+  const remove = () => {
+    if (!confirm("この投稿を削除しますか？")) return;
+    void run("delete", async () => {
+      await engine.deletePost(post);
+      onClose();
+    })();
+  };
 
   return (
     <Sheet onClose={onClose} dark>
@@ -180,7 +202,37 @@ function ClipSheet({ post, onClose }: { post: PostView; onClose: () => void }) {
         ) : (
           <div className="clip-placeholder">{failed ? <Lock size={28} /> : <Spinner />}</div>
         )}
-        <TextOverlay text={post.content?.text} />
+        {editing === null ? (
+          <TextOverlay text={post.content?.text} />
+        ) : (
+          <textarea
+            className="overlay-text editing"
+            value={editing}
+            rows={1}
+            onChange={(e) => setEditing(e.target.value.replace(/\n/g, ""))}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveText())}
+            ref={fitHeight}
+            onInput={(e) => fitHeight(e.currentTarget)}
+            maxLength={MAX_POST_TEXT}
+            autoFocus
+            aria-label="文字"
+          />
+        )}
+        {mine && post.content && (
+          <div className="owner-actions">
+            {editing === null ? (
+              <>
+                <IconButton icon={Pencil} label="文字を変える" variant="soft" size={18} disabled={!!busy} onClick={() => setEditing(post.content?.text ?? "")} />
+                <IconButton icon={Trash2} label="削除" variant="soft" size={18} disabled={!!busy} busy={busy === "delete"} onClick={remove} />
+              </>
+            ) : (
+              <>
+                <IconButton icon={X} label="やめる" variant="soft" size={18} onClick={() => setEditing(null)} />
+                <IconButton icon={Check} label="保存" variant="soft" size={18} onClick={saveText} />
+              </>
+            )}
+          </div>
+        )}
         <div className="clip-meta">
           <Avatar id={post.author} name={post.authorName} size={26} />
           <span>{post.authorName}</span>

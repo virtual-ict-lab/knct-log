@@ -272,6 +272,7 @@ export function admitContent(s: GroupState, h: Header): Admission {
   if (!s.createId) return { ok: false, missing: [] };
   if (s.dissolved) return { ok: false, reason: "group dissolved" };
   if (!s.members.has(h.author)) return { ok: false, reason: "not a member" };
+  if (h.kind === "post.delete") return { ok: true };
   if (!h.epoch || !s.epochs.has(h.epoch)) return { ok: false, missing: h.epoch ? [h.epoch] : [] };
   if (h.kind === "key.wrap" && !s.members.has(h.body!.to as string)) return { ok: false, reason: "wrap target is not a member" };
   return { ok: true };

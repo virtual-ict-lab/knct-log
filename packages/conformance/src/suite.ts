@@ -8,6 +8,9 @@ import {
   createGroup,
   createReaction,
   createReply,
+  createRecord,
+  deletePost,
+  editPost,
   deriveKek,
   generateAccountSecret,
   importAccountKeys,
@@ -149,6 +152,13 @@ export function conformance(name: string, target: () => Target) {
       const opened = await openContent<PostContent>(g.key, got.header);
       expect(await decryptBlob(opened.ck, await alice.api.downloadBlob(blob.blobId), blob.blobId)).toEqual(video);
       await expect(mallory.api.downloadBlob(blob.blobId)).rejects.toMatchObject({ status: 403 });
+
+      // 文字の変更と削除：削除は投稿者本人のみ。削除すると動画も消える
+      expect((await post(bob.api, g.group, await editPost(bob, s, g.key, ref, "変えた")))[0]!.status).toBe("ok");
+      const notMine = await createRecord(alice.signer, { group: g.group, kind: "post.delete", deps: [p.id], exp: ref.exp, body: { post: p.id } });
+      expect((await post(alice.api, g.group, notMine))[0]).toMatchObject({ status: "invalid" });
+      expect((await post(bob.api, g.group, await deletePost(bob, s, ref)))[0]!.status).toBe("ok");
+      await expect(alice.api.downloadBlob(blob.blobId)).rejects.toMatchObject({ status: 404 });
 
       // 名前・アイコンの変更：既定では管理者のみ。管理者が許可するとメンバーも可（hours / editableBy は管理者のみ）
       s = await deriveGroupState(g.group, recs);

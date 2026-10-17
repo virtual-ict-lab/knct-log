@@ -56,6 +56,12 @@ export interface ReplyContent {
   text: string;
 }
 
+/** 投稿の文字の変更。空文字は文字を消す */
+export interface PostEditContent {
+  ref: string;
+  text: string;
+}
+
 /** 反応先の投稿 */
 export interface PostRef {
   id: string;
@@ -160,7 +166,7 @@ export async function wrapFor(
 export async function sealedRecord(
   actor: Actor,
   group: string,
-  kind: "group.settings" | "profile" | "post" | "reaction" | "reply",
+  kind: "group.settings" | "profile" | "post" | "reaction" | "reply" | "post.edit",
   epoch: string,
   key: Uint8Array<ArrayBuffer>,
   content: unknown,
@@ -217,4 +223,18 @@ export async function createReply(actor: Actor, s: GroupState, key: Uint8Array<A
   if (text.length > MAX_REPLY_TEXT) throw new Error("reply too long");
   const content: ReplyContent = { ref: post.id, text };
   return sealedRecord(actor, s.group, "reply", s.currentEpoch!, key, content, { exp: post.exp, body: { to: post.author } });
+}
+
+/** 自分の投稿の文字を変える。投稿者ごと・投稿ごとに ts が最新のものが有効 */
+export async function editPost(actor: Actor, s: GroupState, key: Uint8Array<ArrayBuffer>, post: PostRef, text: string) {
+  if (post.author !== actor.signer.pub) throw new Error("not my post");
+  if (text.length > MAX_POST_TEXT) throw new Error("text too long");
+  const content: PostEditContent = { ref: post.id, text };
+  return sealedRecord(actor, s.group, "post.edit", s.currentEpoch!, key, content, { exp: post.exp });
+}
+
+/** 自分の投稿を消す。サーバーは動画を消し、端末は投稿を表示しない */
+export async function deletePost(actor: Actor, s: GroupState, post: PostRef) {
+  if (post.author !== actor.signer.pub) throw new Error("not my post");
+  return createRecord(actor.signer, { group: s.group, kind: "post.delete", deps: [post.id], exp: post.exp, body: { post: post.id } });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Send, SwitchCamera, X } from "lucide-react";
 import { MAX_POST_TEXT } from "@knct-log/core";
 import { Avatar, ErrorNote, IconButton, Spinner } from "./common.tsx";
@@ -19,19 +19,38 @@ function pickMime() {
   return MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
 }
 
-type Clip = { bytes: Uint8Array<ArrayBuffer>; mime: string; url: string; takenAt: number; size?: { w: number; h: number } };
+type Clip = { bytes: Uint8Array<ArrayBuffer>; mime: string; url: string; takenAt: number; size: { w: number; h: number } };
 
-const LANDSCAPE = "(orientation: landscape)";
-/** 端末（画面）が横向きか。回転に合わせて縦動画と横動画を切り替える */
-function useLandscape() {
-  return useSyncExternalStore(
-    (cb) => {
-      const q = matchMedia(LANDSCAPE);
-      q.addEventListener("change", cb);
-      return () => q.removeEventListener("change", cb);
+/** 撮る動画の大きさ。端末の向きによらず横動画にする */
+const OUT_W = 1280;
+const OUT_H = 720;
+
+/** カメラの映像の中央を 16:9 に切り抜いた映像に、カメラの音声を付ける（プレビューの object-fit: cover と同じ範囲） */
+function landscapeStream(video: HTMLVideoElement, source: MediaStream) {
+  const canvas = document.createElement("canvas");
+  canvas.width = OUT_W;
+  canvas.height = OUT_H;
+  const ctx = canvas.getContext("2d")!;
+  let raf = 0;
+  const draw = () => {
+    const { videoWidth: vw, videoHeight: vh } = video;
+    if (vw && vh) {
+      const scale = Math.max(OUT_W / vw, OUT_H / vh);
+      const w = OUT_W / scale;
+      const h = OUT_H / scale;
+      ctx.drawImage(video, (vw - w) / 2, (vh - h) / 2, w, h, 0, 0, OUT_W, OUT_H);
+    }
+    raf = requestAnimationFrame(draw);
+  };
+  draw();
+  const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...source.getAudioTracks()]);
+  return {
+    stream,
+    stop() {
+      cancelAnimationFrame(raf);
+      stream.getVideoTracks().forEach((t) => t.stop());
     },
-    () => matchMedia(LANDSCAPE).matches,
-  );
+  };
 }
 
 /**
@@ -55,7 +74,6 @@ export function Capture({ preselect }: { preselect: string | null }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const landscape = useLandscape();
 
   useEffect(() => {
     if (!groups || targets) return;
@@ -70,8 +88,9 @@ export function Capture({ preselect }: { preselect: string | null }) {
       ?.getUserMedia({
         video: {
           facingMode: facing,
-          width: { ideal: landscape ? 1280 : 720 },
-          height: { ideal: landscape ? 720 : 1280 },
+          // 縦に持つと縦長で届くので、切り抜いても足りるように大きめに頼む
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 30 },
         },
         audio: true,
@@ -86,19 +105,19 @@ export function Capture({ preselect }: { preselect: string | null }) {
     return () => {
       cancelled = true;
     };
-  }, [facing, phase, landscape]);
+  }, [facing, phase]);
 
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
-  // 大きさを書き足しても同じ URL のまま使うので、URL が変わったときだけ解放する
-  const clipUrl = clip?.url;
-  useEffect(() => () => void (clipUrl && URL.revokeObjectURL(clipUrl)), [clipUrl]);
+  useEffect(() => () => void (clip && URL.revokeObjectURL(clip.url)), [clip]);
 
   async function record() {
     const stream = streamRef.current;
+    const video = videoRef.current;
     const mime = pickMime();
-    if (!stream || mime === null || !targets?.size) return;
+    if (!stream || !video || mime === null || !targets?.size) return;
     setPhase("recording");
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined);
+    const out = landscapeStream(video, stream);
+    const rec = new MediaRecorder(out.stream, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined);
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     const takenAt = Date.now();
@@ -110,9 +129,10 @@ export function Capture({ preselect }: { preselect: string | null }) {
     rec.stop();
     await done;
     clearInterval(timer);
+    out.stop();
     stream.getTracks().forEach((t) => t.stop());
     const blob = new Blob(chunks, { type: rec.mimeType || mime || "video/webm" });
-    setClip({ bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type, url: URL.createObjectURL(blob), takenAt });
+    setClip({ bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type, url: URL.createObjectURL(blob), takenAt, size: { w: OUT_W, h: OUT_H } });
     setPhase("review");
   }
 
@@ -158,10 +178,6 @@ export function Capture({ preselect }: { preselect: string | null }) {
             autoPlay
             loop
             playsInline
-            onLoadedMetadata={(e) => {
-              const { videoWidth: w, videoHeight: h } = e.currentTarget;
-              if (w && h) setClip((c) => c && { ...c, size: { w, h } });
-            }}
           />
         ) : (
           <video key="live" ref={videoRef} autoPlay playsInline muted className={facing === "user" ? "mirror" : ""} />
