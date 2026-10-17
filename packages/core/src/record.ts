@@ -18,9 +18,9 @@ export const CONTROL_KINDS = [
   "admin.transfer",
   "key.rotate",
 ] as const;
-export const CONTENT_KINDS = ["key.wrap", "profile", "post", "reaction", "reply"] as const;
+export const CONTENT_KINDS = ["key.wrap", "profile", "post", "reaction", "reply", "post.edit", "post.delete"] as const;
 /** 7 日で消える kind（exp 必須） */
-export const EPHEMERAL_KINDS = ["post", "reaction", "reply"] as const;
+export const EPHEMERAL_KINDS = ["post", "reaction", "reply", "post.edit", "post.delete"] as const;
 export type ControlKind = (typeof CONTROL_KINDS)[number];
 export type ContentKind = (typeof CONTENT_KINDS)[number];
 export type Kind = ControlKind | ContentKind;
@@ -96,6 +96,10 @@ const BODY: Record<Kind, { body: BodyCheck; ct: boolean; epoch: boolean }> = {
   // to = 反応先の投稿の作成者（通知の宛先にだけ使う）。どの投稿かは ct の中
   reaction: { body: (b) => isKey(b.to), ct: true, epoch: true },
   reply: { body: (b) => isKey(b.to), ct: true, epoch: true },
+  // 文字の変更。どの投稿かは ct の中。投稿者本人のものだけが有効
+  "post.edit": { body: () => true, ct: true, epoch: true },
+  // 投稿の削除。サーバーが動画を消せるように、対象の投稿 ID は公開する
+  "post.delete": { body: (b) => isId(b.post), ct: false, epoch: false },
 };
 
 export function validateHeader(h: unknown): asserts h is Header {
@@ -120,8 +124,10 @@ export function validateHeader(h: unknown): asserts h is Header {
   if (!spec.body((r.body ?? {}) as Record<string, unknown>)) fail(`invalid body for ${r.kind as string}`);
   if (r.kind === "post" && (!Array.isArray(r.blobs) || r.blobs.length === 0 || r.exp === undefined))
     fail("post requires blobs and exp");
-  if ((r.kind === "reaction" || r.kind === "reply") && (r.exp === undefined || r.blobs !== undefined))
+  if ((r.kind === "reaction" || r.kind === "reply" || r.kind === "post.edit" || r.kind === "post.delete") && (r.exp === undefined || r.blobs !== undefined))
     fail(`${r.kind} requires exp and no blobs`);
+  if (r.kind === "post.delete" && !(r.deps as string[]).includes((r.body as Record<string, unknown>).post as string))
+    fail("post.delete must depend on the post");
 }
 
 export async function recordId(payload: Uint8Array<ArrayBuffer>): Promise<string> {

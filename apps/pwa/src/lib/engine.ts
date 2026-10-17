@@ -13,6 +13,7 @@ import {
   isIcon,
   type ReactionContent,
   type ReplyContent,
+  type PostEditContent,
   type Unlock,
   type VerifiedRecord,
   createGroup,
@@ -20,6 +21,8 @@ import {
   createPost,
   createReaction,
   createReply,
+  deletePost,
+  editPost,
   cryptoKeySigner,
   decryptBlob,
   deriveGroupState,
@@ -693,6 +696,29 @@ export class Engine extends EventTarget {
     void this.sync();
   }
 
+  /** 自分の投稿の文字を変える。空にすると文字を消す */
+  async editText(post: PostView, text: string) {
+    const { s, key } = await this.currentKey(post.group);
+    const ref = { id: post.id, author: post.author, exp: post.exp };
+    await this.enqueue(post.group, [await editPost(this.actor(), s, key, ref, text.trim())]);
+    void this.sync();
+  }
+
+  /** 自分の投稿を消す。まだ送っていなければ、送らずにこの端末から消すだけ */
+  async deletePost(post: PostView) {
+    const queued = (await this.db.getAll("outbox")).find((o) => o.recordId === post.id);
+    if (queued) {
+      await this.db.delete("outbox", queued.seq!);
+      await this.db.delete("records", post.id);
+    } else {
+      const s = await this.state(post.group);
+      await this.enqueue(post.group, [await deletePost(this.actor(), s, { id: post.id, author: post.author, exp: post.exp })]);
+    }
+    await this.db.delete("blobs", post.blobId);
+    this.changed();
+    void this.sync();
+  }
+
   // ---------- 表示用 ----------
 
   /** レコードの暗号文を開く。鍵がない・壊れているときは null */
@@ -775,8 +801,19 @@ export class Engine extends EventTarget {
     // リアクションは作成者ごと・投稿ごとに最新の 1 つ。返信は全部
     const reactions = new Map<string, Map<string, { emoji: string; ts: number; id: string }>>();
     const replies = new Map<string, PostView["replies"]>();
+    // 文字の変更と削除は、投稿者本人のものだけを後で当てる
+    const edits = new Map<string, { author: string; text: string; ts: number; id: string }>();
+    const deleted = new Map<string, string>();
     for (const r of recs) {
-      if (r.kind === "reaction") {
+      if (r.kind === "post.delete") {
+        deleted.set(r.header.body!.post as string, r.header.author);
+      } else if (r.kind === "post.edit") {
+        const c = await this.open<PostEditContent>(group, r);
+        if (!c) continue;
+        const key = `${c.ref}/${r.header.author}`;
+        const cur = edits.get(key);
+        if (!cur || cur.ts < r.ts || (cur.ts === r.ts && cur.id < r.id)) edits.set(key, { author: r.header.author, text: c.text, ts: r.ts, id: r.id });
+      } else if (r.kind === "reaction") {
         const c = await this.open<ReactionContent>(group, r);
         if (!c) continue;
         const per = reactions.get(c.ref) ?? reactions.set(c.ref, new Map()).get(c.ref)!;
@@ -797,8 +834,10 @@ export class Engine extends EventTarget {
 
     const out: PostView[] = [];
     for (const r of recs) {
-      if (r.kind !== "post") continue;
-      const content = await this.open<PostContent>(group, r);
+      if (r.kind !== "post" || deleted.get(r.id) === r.header.author) continue;
+      const opened = await this.open<PostContent>(group, r);
+      const edit = edits.get(`${r.id}/${r.header.author}`);
+      const content = opened && edit ? { ...opened, text: edit.text || undefined } : opened;
       const counts = new Map<string, { count: number; mine: boolean }>();
       for (const [author, x] of reactions.get(r.id) ?? []) {
         if (!x.emoji) continue;
@@ -854,7 +893,9 @@ export class Engine extends EventTarget {
   async postedThisHour(group: string) {
     const start = new Date();
     start.setMinutes(0, 0, 0);
-    return (await this.records(group)).some((r) => r.kind === "post" && r.header.author === this.me && r.ts >= start.getTime());
+    const recs = await this.records(group);
+    const deleted = new Set(recs.filter((r) => r.kind === "post.delete" && r.header.author === this.me).map((r) => r.header.body!.post as string));
+    return recs.some((r) => r.kind === "post" && r.header.author === this.me && r.ts >= start.getTime() && !deleted.has(r.id));
   }
 }
 

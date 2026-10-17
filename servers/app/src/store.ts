@@ -126,6 +126,22 @@ export class Store {
     );
   }
 
+  /** 削除の対象。同じグループ・同じ作成者の post のときだけ返す */
+  private async deleteTarget(h: Header): Promise<Header | null> {
+    const row = await this.d.sql.first<{ payload: string }>("SELECT payload FROM records WHERE id = ?", h.body!.post as string);
+    if (!row) return null;
+    const post = header(row.payload);
+    return post.kind === "post" && post.group === h.group && post.author === h.author ? post : null;
+  }
+
+  /** 削除された投稿の動画を消す。投稿のレコードは削除のレコードと一緒に期限まで残す */
+  private async dropBlobsOf(post: Header) {
+    const ids = post.blobs ?? [];
+    if (!ids.length) return;
+    await this.d.blobs.delete(ids);
+    await this.d.sql.batch(ids.map((id) => ({ sql: "DELETE FROM blobs WHERE id = ?", params: [id] })));
+  }
+
   /**
    * クライアントから直接届いたレコードを検証して保存する。
    * 作成者が認証済み端末であること、メンバー規則、blob の到着をすべて確認する。
@@ -176,8 +192,11 @@ export class Store {
           const miss = h.blobs!.filter((b) => !stored.has(b));
           if (miss.length) { results.push({ id, status: "missing", missing: miss.map((b) => BLOB_PREFIX + b) }); continue; }
         }
+        const target = h.kind === "post.delete" ? await this.deleteTarget(h) : null;
+        if (h.kind === "post.delete" && !target) { invalid("can only delete own post"); continue; }
         await this.insert(id, h, rec.envelope, "direct");
         await this.attachBlobs(h);
+        if (target) await this.dropBlobsOf(target);
       }
       results.push({ id, status: "ok" });
       onAccepted?.(h, id);
@@ -208,6 +227,10 @@ export class Store {
       if (miss.length) { results.push({ id, status: "missing", missing: miss }); continue; }
       await this.insert(id, h, rec.envelope, "peer");
       await this.attachBlobs(h);
+      if (h.kind === "post.delete") {
+        const target = await this.deleteTarget(h);
+        if (target) await this.dropBlobsOf(target);
+      }
       if (isControlKind(h.kind)) touched.add(h.group);
       results.push({ id, status: "ok" });
     }

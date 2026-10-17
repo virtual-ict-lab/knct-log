@@ -1,8 +1,5 @@
-/* 撮影直後の文字入力: 再生時の .overlay-text と同じ位置・折り返し */
-.capture textarea.overlay-text.editing {
-  resize: none; overflow: hidden; display: block; width: 84%; right: auto; padding: 0; font-family: inherit;
-  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all;
-  border-bottom: 0; background: transparent; box-shadow: none;
-}
-.capture textarea.overlay-text.editing::placeholder { color: transparent; }
 .capture .top-controls { min-height: 68px; }
+/* 横動画だけを撮る。画面の中に 16:9 の枠を置き、その範囲を切り抜いて録る */
+.capture .viewfinder {
+  inset: 0; margin: auto; width: min(100vw, 100dvh * 16 / 9); height: min(100dvh, 100vw * 9 / 16);
+}
