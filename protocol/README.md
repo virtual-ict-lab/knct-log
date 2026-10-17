@@ -97,7 +97,7 @@ payload（ヘッダー）のフィールド:
 | `key.rotate` | `parent`（旧 epoch） | — | メンバー | 制御 heads + `parent` |
 | `key.wrap` | `to`, `enc`, `ct`（HPKE） | — | メンバー | `[epoch, 対象の参加レコード]` |
 | `profile` | — | `{name, icon?}` | メンバー | `[epoch]` |
-| `post` | — | `{ck, mime, durationMs, takenAt, text?}` | メンバー | `[epoch]` |
+| `post` | — | `{ck, mime, durationMs, takenAt, text?, w?, h?}` | メンバー | `[epoch]` |
 | `reaction` | `to`（投稿者） | `{ref, emoji}` | メンバー | `[epoch]` |
 | `reply` | `to`（投稿者） | `{ref, text}` | メンバー | `[epoch]` |
 
@@ -107,6 +107,7 @@ payload（ヘッダー）のフィールド:
 - **誰が名前・アイコンを変えられるか**：既定は管理者のみ。管理者が `group.settings` の `body.editableBy` を `"members"` にすると、メンバーなら誰でも `body` が空の `group.settings`（名前とアイコンだけ）を出せる。`hours` / `utcOffsetMin` / `editableBy` を含むレコードは常に管理者のみ（`editableBy` を変えられるのは管理者だけ）。権限はレコードを導出順に適用する時点の `editableBy` で判定するので、設定の切り替えと同時に出されたレコードも到着順に依らず同じ結果になる。最後に適用された `group.settings` の `ct` が現在の名前・アイコン。旧実装は管理者以外の `group.settings` を無視するので、`editableBy` は旧クライアントには効かない（読む側は影響を受けない）。
 - 自分のアイコンは名前と同じくアカウント文書の bundle（`AccountSecret.icon?`）に入れて端末間で引き継ぎ、各グループの `profile` として出し直す。bundle の上限は 16384 文字。
 - `post.text` は動画の中央に重ねる文字（40 文字まで）。動画には焼き込まず、表示時に重ね、Vlog を作るときだけ焼き込む。
+- `post.w` / `post.h` は表示したときの動画の幅と高さ（回転を反映した画素数）。端末を横にして撮ると横長になる。読み込む前に並べ方を決めるためのもので、無いとき（旧クライアント）は縦長 9:16 とみなし、動画を読み込んだあとの実際の大きさで並べ直す。
 - `reaction` / `reply` の `exp` は対象の投稿と同じ（投稿と一緒に消える）。`ref`（対象の投稿 ID）は暗号文の中なので、サーバーにはどの投稿への反応かは分からない。`to` は通知の宛先にだけ使う。
 - `reaction` は作成者ごと・投稿ごとに最新（`(ts, id)` が最大）の 1 つが有効。`emoji` が空文字なら取り消し。`reply.text` は 200 文字まで。
 

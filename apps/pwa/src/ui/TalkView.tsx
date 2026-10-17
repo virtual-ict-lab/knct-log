@@ -1,7 +1,8 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Hourglass, Lock } from "lucide-react";
 import type { PostView } from "../lib/engine.ts";
 import { buildTimeline } from "../lib/timeline.ts";
+import { aspectOf } from "../lib/layout.ts";
 import { Avatar, Spinner } from "./common.tsx";
 import { formatDay, formatTime } from "./hooks.ts";
 import { TextOverlay, useClipUrl } from "./GroupPage.tsx";
@@ -54,14 +55,26 @@ export function TalkView({ posts, members, onOpen }: { posts: PostView[]; member
 
 function ClipBubble({ post, mine, onOpen }: { post: PostView; mine: boolean; onOpen: () => void }) {
   const { url, failed, ref } = useClipUrl(post);
+  const [aspect, setAspect] = useState(() => aspectOf(post));
   return (
     <div className={`msg ${mine ? "mine" : ""}`}>
       {!mine && <Avatar id={post.author} name={post.authorName} size={30} />}
       <div className="msg-body">
         {!mine && <span className="msg-name">{post.authorName ?? "?"}</span>}
         <div className="msg-row">
-          <div className="clip" ref={ref} onClick={onOpen} role="button" aria-label={`${post.authorName ?? ""} ${formatTime(post.ts)}`}>
-            {url ? <video src={url} playsInline muted loop autoPlay /> : <div className="clip-placeholder">{failed || !post.content ? <Lock size={22} /> : <Spinner size={22} />}</div>}
+          <div
+            className={`clip ${aspect > 1 ? "landscape" : ""}`}
+            ref={ref}
+            style={{ aspectRatio: aspect }}
+            onClick={onOpen}
+            role="button"
+            aria-label={`${post.authorName ?? ""} ${formatTime(post.ts)}`}
+          >
+            {url ? (
+              <video src={url} playsInline muted loop autoPlay onLoadedMetadata={(e) => e.currentTarget.videoHeight && setAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight)} />
+            ) : (
+              <div className="clip-placeholder">{failed || !post.content ? <Lock size={22} /> : <Spinner size={22} />}</div>
+            )}
             <TextOverlay text={post.content?.text} />
           </div>
           <span className="msg-time">{post.pending ? <Hourglass size={12} /> : formatTime(post.ts)}</span>

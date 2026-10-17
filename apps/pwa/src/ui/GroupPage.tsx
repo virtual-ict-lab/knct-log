@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, CalendarDays, Check, Copy, Film, Hourglass, KeyRound, LayoutGrid, Lock, MessageCircle, Plus, Send, Settings, Share2, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, CalendarDays, Check, Copy, Hourglass, KeyRound, LayoutGrid, Lock, MessageCircle, Plus, Send, Settings, Share2, UserPlus, Volume2, VolumeX } from "lucide-react";
 import { MAX_REPLY_TEXT } from "@knct-log/core";
 import type { PostView } from "../lib/engine.ts";
 import { Screen } from "./Layout.tsx";
 import { VlogDialog } from "./VlogDialog.tsx";
 import { CalendarSheet } from "./CalendarSheet.tsx";
 import { TalkView } from "./TalkView.tsx";
+import { HourPager } from "./HourPager.tsx";
+import { aspectOf } from "../lib/layout.ts";
 import { Avatar, ErrorNote, IconButton, QUICK_EMOJIS, Qr, Sheet, Spinner, useAction, useFlash } from "./common.tsx";
-import { dayKey, formatDay, formatTime, go, useEngine, useLive } from "./hooks.ts";
+import { formatTime, go, useEngine, useLive } from "./hooks.ts";
 
 const VIEW_KEY = "knct-log:group-view";
 function loadMode(): "grid" | "talk" {
@@ -37,18 +39,13 @@ export function GroupPage({ group }: { group: string }) {
       /* 保存できなくても動く */
     }
   };
-  // カレンダーで選んだ日へスクロール
+  // カレンダーで選んだ日へスクロール（一覧表示では、その日の最初の時間のページへめくる）
   useEffect(() => {
     if (!jump) return;
-    document.querySelector(`[data-day="${jump}"]`)?.scrollIntoView({ block: "start" });
+    document.querySelector(`[data-day="${jump}"]`)?.scrollIntoView({ block: "start", inline: "start" });
     setJump(null);
   }, [jump, mode, posts]);
 
-  const days = useMemo(() => {
-    const m = new Map<string, PostView[]>();
-    for (const p of posts ?? []) (m.get(dayKey(p.ts)) ?? m.set(dayKey(p.ts), []).get(dayKey(p.ts))!).push(p);
-    return [...m.values()];
-  }, [posts]);
   const open = posts?.find((p) => p.id === openId) ?? null;
 
   if (!view) return <Screen title="" back="/">{null}</Screen>;
@@ -83,19 +80,7 @@ export function GroupPage({ group }: { group: string }) {
       ) : null}
 
       {mode === "talk" && posts && <TalkView posts={posts} members={view.members} onOpen={setOpenId} />}
-      {mode === "grid" && days.map((day) => (
-        <section key={dayKey(day[0]!.ts)} className="day" data-day={dayKey(day[0]!.ts)}>
-          <div className="day-head">
-            <h2>{formatDay(day[0]!.ts)}</h2>
-            <IconButton icon={Film} label="まとめる" disabled={!day.some((p) => p.content)} onClick={() => setVlogDay(day)} />
-          </div>
-          <div className="grid">
-            {day.map((p) => (
-              <ClipCard key={p.id} post={p} onOpen={() => setOpenId(p.id)} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {mode === "grid" && posts && <HourPager posts={posts} onOpen={setOpenId} onVlog={setVlogDay} />}
 
       {ready && (
         <button className={`fab ${posted ? "done" : ""}`} aria-label={posted ? "この1時間は撮影済み" : "撮影"} title={posted ? "この1時間は撮影済み" : "撮影"} disabled={!!posted} onClick={() => go(`/capture?g=${group}`)}>
@@ -168,44 +153,11 @@ export function TextOverlay({ text }: { text?: string }) {
   return <div className="overlay-text">{text}</div>;
 }
 
-function ClipCard({ post, onOpen }: { post: PostView; onOpen: () => void }) {
-  const { url, failed, ref } = useClipUrl(post);
-  return (
-    <div className="clip" ref={ref} onClick={onOpen} role="button" aria-label={`${post.authorName ?? ""} ${formatTime(post.ts)}`}>
-      {url ? (
-        <video src={url} playsInline muted loop autoPlay />
-      ) : (
-        <div className="clip-placeholder">{failed || !post.content ? <Lock size={22} /> : <Spinner size={22} />}</div>
-      )}
-      <TextOverlay text={post.content?.text} />
-      <div className="clip-meta">
-        <Avatar id={post.author} name={post.authorName} size={22} />
-        <span>{post.pending ? <Hourglass size={14} /> : formatTime(post.ts)}</span>
-      </div>
-      {(post.reactions.length > 0 || post.replies.length > 0) && (
-        <div className="clip-reactions">
-          {post.reactions.slice(0, 3).map((r) => (
-            <span key={r.emoji} className={r.mine ? "mine" : ""}>
-              {r.emoji}
-              {r.count > 1 && <small>{r.count}</small>}
-            </span>
-          ))}
-          {post.replies.length > 0 && (
-            <span>
-              <MessageCircle size={13} />
-              <small>{post.replies.length}</small>
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** 1 本を大きく見る。リアクションと返信 */
 function ClipSheet({ post, onClose }: { post: PostView; onClose: () => void }) {
   const engine = useEngine();
   const { url, failed } = useClipUrl(post, true);
+  const [aspect, setAspect] = useState(() => aspectOf(post));
   const [muted, setMuted] = useState(false);
   const [reply, setReply] = useState("");
   const [custom, setCustom] = useState<string | null>(null);
@@ -214,9 +166,17 @@ function ClipSheet({ post, onClose }: { post: PostView; onClose: () => void }) {
 
   return (
     <Sheet onClose={onClose} dark>
-      <div className="clip-large">
+      <div className="clip-large" style={{ aspectRatio: aspect }}>
         {url ? (
-          <video src={url} playsInline autoPlay loop muted={muted} onClick={() => setMuted(!muted)} />
+          <video
+            src={url}
+            playsInline
+            autoPlay
+            loop
+            muted={muted}
+            onClick={() => setMuted(!muted)}
+            onLoadedMetadata={(e) => e.currentTarget.videoHeight && setAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight)}
+          />
         ) : (
           <div className="clip-placeholder">{failed ? <Lock size={28} /> : <Spinner />}</div>
         )}

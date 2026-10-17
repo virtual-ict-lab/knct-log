@@ -36,6 +36,9 @@ export interface PostContent {
   takenAt: number;
   /** 動画の中央に重ねて表示する文字（任意） */
   text?: string;
+  /** 表示したときの幅と高さ（任意）。縦長・横長の判定と並べ方に使う */
+  w?: number;
+  h?: number;
 }
 
 export const MAX_POST_TEXT = 40;
