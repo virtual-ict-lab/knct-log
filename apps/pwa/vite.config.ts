@@ -4,6 +4,8 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   build: { target: "es2022" },
+  // スマホでの確認は `tailscale serve` の HTTPS（*.ts.net）経由で開く（README の「スマホで確認する」）
+  server: { allowedHosts: [".ts.net"] },
   plugins: [
     react(),
     VitePWA({

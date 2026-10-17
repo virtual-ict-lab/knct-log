@@ -49,4 +49,20 @@ SECRET=dev node servers/campus/src/main.ts                                      
 VITE_ENDPOINTS="学内=http://127.0.0.1:3000,Cloudflare=http://127.0.0.1:8787" pnpm -F @knct-log/pwa dev
 ```
 
+### スマホで確認する
+
+カメラ・パスキー・暗号（`crypto.subtle`）は HTTPS（か `localhost`）でしか使えず、パスキーは IP アドレスでは作れない。`http://192.168.x.x:5173` のように開くと動かないので、Tailscale の `serve` で `https://<マシン名>.<tailnet>.ts.net` として開く（スマホも同じ tailnet に入れる）。
+
+```sh
+HOST=$(tailscale status --self --json | jq -r '.Self.DNSName | rtrimstr(".")')
+tailscale serve --bg --https=443 5173     # PWA
+tailscale serve --bg --https=8443 3000    # 学内サーバー
+
+SECRET=dev PUBLIC_URL=https://$HOST:8443 node servers/campus/src/main.ts
+VITE_ENDPOINTS="学内=https://$HOST:8443" pnpm -F @knct-log/pwa dev
+# スマホで https://$HOST を開く。終わったら tailscale serve reset
+```
+
+`VITE_RP_ID` は設定しない（開いているホスト名がパスキーの RP ID になる）。ホスト名が変わると、そのパスキーではログインできない。
+
 デプロイは [docs/campus-deploy.md](docs/campus-deploy.md)、プロトコルは [protocol/README.md](protocol/README.md) を参照。

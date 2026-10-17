@@ -5,21 +5,29 @@ import { openLocalDb } from "./lib/db.ts";
 import { Engine } from "./lib/engine.ts";
 import { defaultEndpoints } from "./lib/endpoints.ts";
 import { App } from "./ui/App.tsx";
+import { Insecure } from "./ui/Insecure.tsx";
 import { EngineContext } from "./ui/hooks.ts";
 import "./styles.css";
 
-registerSW({ immediate: true });
+const root = createRoot(document.getElementById("root")!);
 
-const db = await openLocalDb();
-const engine = new Engine(db);
-if ((await engine.endpoints()).length === 0) await engine.setEndpoints(defaultEndpoints());
-await engine.load();
-void engine.prune();
+if (!isSecureContext) {
+  // カメラ・パスキー・暗号（crypto.subtle）・Service Worker は HTTPS か localhost でしか使えない
+  root.render(<Insecure />);
+} else {
+  registerSW({ immediate: true });
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <EngineContext.Provider value={engine}>
-      <App />
-    </EngineContext.Provider>
-  </StrictMode>,
-);
+  const db = await openLocalDb();
+  const engine = new Engine(db);
+  if ((await engine.endpoints()).length === 0) await engine.setEndpoints(defaultEndpoints());
+  await engine.load();
+  void engine.prune();
+
+  root.render(
+    <StrictMode>
+      <EngineContext.Provider value={engine}>
+        <App />
+      </EngineContext.Provider>
+    </StrictMode>,
+  );
+}
