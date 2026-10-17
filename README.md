@@ -55,6 +55,7 @@ VITE_ENDPOINTS="学内=http://127.0.0.1:3000,Cloudflare=http://127.0.0.1:8787" p
 
 ```sh
 HOST=$(tailscale status --self --json | jq -r '.Self.DNSName | rtrimstr(".")')
+# set HOST (tailscale status --self --json | jq -r '.Self.DNSName | rtrimstr(".")')
 tailscale serve --bg --https=443 5173     # PWA
 tailscale serve --bg --https=8443 3000    # 学内サーバー
 

@@ -5,7 +5,8 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   build: { target: "es2022" },
   // スマホでの確認は `tailscale serve` の HTTPS（*.ts.net）経由で開く（README の「スマホで確認する」）
-  server: { allowedHosts: [".ts.net"] },
+  // tailscale serve は 127.0.0.1 に転送するので、localhost（Node では ::1 になる）ではなく IPv4 で待ち受ける
+  server: { host: "127.0.0.1", allowedHosts: [".ts.net"] },
   plugins: [
     react(),
     VitePWA({
