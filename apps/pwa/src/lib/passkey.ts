@@ -1,4 +1,5 @@
 import { PRF_SALT, fromB64u, randomBytes, toB64u } from "@knct-log/core";
+import { config } from "./config.ts";
 
 /**
  * パスキー（WebAuthn）。サーバーでの検証はせず、PRF 拡張の出力だけを使う。
@@ -21,7 +22,7 @@ export class PasskeyError extends Error {
 
 /** CF Pages と学内サーバーで同じパスキーを使えるよう、共通の親ドメインを RP ID にできる */
 function rpId() {
-  return import.meta.env.VITE_RP_ID || location.hostname;
+  return config.rpId || location.hostname;
 }
 
 type PrfOutput = { enabled?: boolean; results?: { first?: BufferSource } };

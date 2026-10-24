@@ -1,9 +1,9 @@
+import { config } from "./config.ts";
 import type { Endpoint } from "./db.ts";
 
-/** ビルド時の既定値。VITE_ENDPOINTS="学内=https://campus.example,CF=https://cf.example"（優先順） */
+/** 既定値。PWA_ENDPOINTS か VITE_ENDPOINTS="学内=https://campus.example,CF=https://cf.example"（優先順） */
 export function defaultEndpoints(): Endpoint[] {
-  const raw = (import.meta.env.VITE_ENDPOINTS as string | undefined) ?? "";
-  const list = raw
+  const list = config.endpoints
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)

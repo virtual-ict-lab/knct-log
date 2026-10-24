@@ -4,3 +4,6 @@
 **/data
 **/.env
 **/.dev.vars
+.git
+**/.claude
+**/.tokensave

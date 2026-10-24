@@ -1,6 +1,7 @@
+import { config } from "./config.ts";
 import type { Engine } from "./engine.ts";
 
-const VAPID = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+const VAPID = config.vapidPublicKey;
 
 export function pushSupported() {
   return !!VAPID && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -31,7 +32,7 @@ export async function enablePush(engine: Engine) {
   const reg = await navigator.serviceWorker.ready;
   const sub =
     (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(VAPID!) }));
+    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(VAPID) }));
   const conn = await engine.connect();
   if (!conn) throw new Error("サーバーに接続できません");
   const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
