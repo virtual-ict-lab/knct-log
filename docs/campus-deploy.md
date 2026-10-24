@@ -41,8 +41,10 @@ wrangler pages deploy dist
 
 ```sh
 cp servers/campus/.env.example servers/campus/.env   # 値を埋める
-docker compose -f servers/campus/compose.yaml up -d --build
+docker compose -f servers/campus/compose.yaml up -d
 ```
+
+イメージはリリースごとに `ghcr.io/virtual-ict-lab/knct-log:<version>`（と `latest`）として GitHub Actions がビルドする。版を固定するときは `KNCT_LOG_VERSION=0.1.0 docker compose ... up -d`、手元でビルドするときは `--build` を付ける。PWA の設定はイメージに入っていないので、`.env` を変えて再起動すれば反映される。
 
 Docker を使わない場合は `node servers/campus/src/main.ts`（Node 26 以上。`node:sqlite` と TypeScript の型除去を使う）。
 
@@ -75,7 +77,9 @@ PWA は HTTPS で配信されるので、学内サーバーも HTTPS でない�
 | `PEER_SIGNING_KEY` | 学内サーバーのピア秘密鍵（PKCS#8, base64url） |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web Push |
 | `DATA_DIR` | SQLite と blob の置き場所（既定 `./data`） |
-| `STATIC_DIR` | PWA の `dist`（任意） |
+| `STATIC_DIR` | PWA の `dist`（任意。イメージでは設定済み） |
+| `PWA_ENDPOINTS` | 配信する PWA の接続先（`VITE_ENDPOINTS` と同じ書式）。PWA には `VAPID_PUBLIC_KEY` と一緒に `/config.js` で渡す |
+| `PWA_RP_ID` | 配信する PWA のパスキーの RP ID（`VITE_RP_ID` と同じ値） |
 | `PORT` | 既定 3000 |
 | `SYNC_INTERVAL_MS` | 既定 10000 |
 | `PROMPT_DELAY_MIN` | 毎時プロンプトを代わりに送るまでの分数（既定 3、単独運用なら 0） |

@@ -1,12 +1,10 @@
 services:
   knct-log:
+    # リリースごとに GitHub Actions がビルドする。`--build` を付けると手元でビルドする
+    image: ghcr.io/virtual-ict-lab/knct-log:${KNCT_LOG_VERSION:-latest}
     build:
       context: ../..
       dockerfile: servers/campus/Dockerfile
-      args:
-        VITE_ENDPOINTS: ${VITE_ENDPOINTS:-}
-        VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
-        VITE_RP_ID: ${VITE_RP_ID:-}
     env_file: .env
     volumes:
       - ./data:/data

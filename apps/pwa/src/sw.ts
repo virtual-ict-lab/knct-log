@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
+import { NetworkFirst } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -8,6 +9,8 @@ declare const self: ServiceWorkerGlobalScope;
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));
+// 起動時の設定は配信元が変えられるので、届くときは最新を使い、届かないときは前回の値で起動する
+registerRoute(({ url }) => url.origin === self.location.origin && url.pathname === "/config.js", new NetworkFirst({ cacheName: "config", networkTimeoutSeconds: 3 }));
 
 self.addEventListener("install", () => void self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));

@@ -14,7 +14,7 @@ export default defineConfig({
       srcDir: "src",
       filename: "sw.ts",
       registerType: "autoUpdate",
-      injectManifest: { globPatterns: ["**/*.{js,css,html,svg,png,woff2}"], maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 },
+      injectManifest: { globPatterns: ["**/*.{js,css,html,svg,png,woff2}"], globIgnores: ["config.js"], maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 },
       manifest: {
         name: "knct-log",
         short_name: "knct-log",

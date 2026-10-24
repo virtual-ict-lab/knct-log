@@ -1,14 +1,12 @@
 # ビルドコンテキストはリポジトリのルート:  docker build -f servers/campus/Dockerfile .
+# PWA の設定（接続先・VAPID 公開鍵・RP ID）はイメージに入れず、起動時の環境変数から /config.js で渡す
 FROM node:26-slim AS build
 RUN npm i -g pnpm@11.25.0
 ENV CI=true
 WORKDIR /app
 COPY . .
-ARG VITE_ENDPOINTS=""
-ARG VITE_VAPID_PUBLIC_KEY=""
-ARG VITE_RP_ID=""
 RUN pnpm install --frozen-lockfile \
- && VITE_ENDPOINTS="$VITE_ENDPOINTS" VITE_VAPID_PUBLIC_KEY="$VITE_VAPID_PUBLIC_KEY" VITE_RP_ID="$VITE_RP_ID" pnpm -F @knct-log/pwa build \
+ && pnpm -F @knct-log/pwa build \
  && pnpm install --frozen-lockfile --prod --filter @knct-log/server-campus...
 
 FROM node:26-slim

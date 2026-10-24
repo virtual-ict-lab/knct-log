@@ -39,6 +39,14 @@ const { app, store } = createApp(deps);
 
 // PWA の静的配信（CF 障害中に新しくインストールする人のため）
 if (env.STATIC_DIR) {
+  // PWA の設定を起動時に渡す（同じイメージをどこにでも置けるように。apps/pwa/src/lib/config.ts）
+  const pwaConfig = { endpoints: env.PWA_ENDPOINTS, vapidPublicKey: env.VAPID_PUBLIC_KEY, rpId: env.PWA_RP_ID };
+  app.get("/config.js", (c) =>
+    c.body(`window.__KNCT_LOG_CONFIG__ = ${JSON.stringify(pwaConfig)};\n`, 200, {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "Cache-Control": "no-cache",
+    }),
+  );
   app.use("/*", serveStatic({ root: env.STATIC_DIR }));
   app.get("*", serveStatic({ root: env.STATIC_DIR, path: "index.html" }));
 }

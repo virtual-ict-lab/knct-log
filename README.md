@@ -66,4 +66,8 @@ VITE_ENDPOINTS="学内=https://$HOST:8443" pnpm -F @knct-log/pwa dev
 
 `VITE_RP_ID` は設定しない（開いているホスト名がパスキーの RP ID になる）。ホスト名が変わると、そのパスキーではログインできない。
 
+### リリース
+
+`main` に入った Conventional Commits（`feat:` / `fix:` など）から release-please がリリース PR を作る。マージするとタグ `v*` が付き、学内サーバーのイメージ `ghcr.io/virtual-ict-lab/knct-log` がビルドされる。
+
 デプロイは [docs/campus-deploy.md](docs/campus-deploy.md)、プロトコルは [protocol/README.md](protocol/README.md) を参照。
