@@ -188,4 +188,38 @@ describe("engine", () => {
     const bad = toB64u(fromB64u(q2.get("k")!).map((b) => b ^ 1));
     await expect(again.acceptLink(q2.get("a")!, q2.get("u")!, bad, 0)).rejects.toThrow();
   });
+
+  it("tracks unread posts per device", async () => {
+    const server = inProcessServer("cf");
+    const alice = await newEngine(server, "アリス");
+    const bob = await newEngine(server, "ボブ");
+    const group = await alice.createGroup("プロコン");
+    const q = new URLSearchParams(new URL(await alice.createInviteLink(group, "https://app.test")).hash.split("?")[1]);
+    await bob.join(q.get("g")!, q.get("i")!, q.get("t")!);
+    await settle(alice, bob);
+
+    // 初めて見るまでは、それまでの投稿は未読にしない
+    await bob.post([group], randomBytes(100), "video/mp4", 3000, Date.now() - 3600_000);
+    await settle(alice, bob);
+    expect((await alice.posts(group)).map((p) => p.unread)).toEqual([false]);
+    await alice.markSeen(group, []);
+
+    await bob.post([group], randomBytes(100), "video/mp4", 3000, Date.now());
+    await alice.post([group], randomBytes(100), "video/mp4", 3000, Date.now());
+    await settle(alice, bob);
+    const posts = await alice.posts(group);
+    expect(posts.filter((p) => p.unread).map((p) => p.author)).toEqual([bob.me]);
+
+    await alice.markSeen(group, posts);
+    expect((await alice.posts(group)).some((p) => p.unread)).toBe(false);
+
+    // トーク表示のように 1 件ずつ同時に既読にしても取りこぼさない
+    await bob.post([group], randomBytes(100), "video/mp4", 3000, Date.now());
+    await bob.post([group], randomBytes(100), "video/mp4", 3000, Date.now());
+    await settle(alice, bob);
+    const fresh = (await alice.posts(group)).filter((p) => p.unread);
+    expect(fresh).toHaveLength(2);
+    await Promise.all(fresh.map((p) => alice.markSeen(group, [p])));
+    expect((await alice.posts(group)).some((p) => p.unread)).toBe(false);
+  });
 });

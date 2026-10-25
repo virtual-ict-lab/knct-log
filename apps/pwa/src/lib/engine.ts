@@ -91,6 +91,8 @@ export interface PostView {
   blobId: string;
   content: PostContent | null;
   pending: boolean;
+  /** ほかの人の投稿で、まだ見ていない */
+  unread: boolean;
   /** 絵文字ごとの数。mine は自分が付けたもの */
   reactions: { emoji: string; count: number; mine: boolean }[];
   replies: { id: string; author: string; authorName: string | null; text: string; ts: number }[];
@@ -107,6 +109,7 @@ export class Engine extends EventTarget {
   readonly db: DB;
   private readonly fetchFn?: typeof fetch;
   private readonly picker: Picker;
+  private seenQueue: Promise<void> = Promise.resolve();
   account: StoredAccount | null = null;
   conn: Connection | null = null;
   lastError: string | null = null;
@@ -637,6 +640,7 @@ export class Engine extends EventTarget {
     for (const k of await tx.objectStore("keys").getAllKeys(IDBKeyRange.bound(`${group}/`, `${group}/￿`))) await tx.objectStore("keys").delete(k);
     await tx.objectStore("groups").delete(group);
     await tx.done;
+    await this.db.delete("meta", `seen/${group}`);
     this.changed();
   }
 
@@ -797,6 +801,7 @@ export class Engine extends EventTarget {
     const recs = (await this.records(group)).filter((r) => (r.header.exp ?? Infinity) >= now);
     const names = await this.profiles(group, recs);
     const pending = new Set((await this.db.getAll("outbox")).map((o) => o.recordId));
+    const seen = await this.seen(group);
 
     // リアクションは作成者ごと・投稿ごとに最新の 1 つ。返信は全部
     const reactions = new Map<string, Map<string, { emoji: string; ts: number; id: string }>>();
@@ -854,11 +859,40 @@ export class Engine extends EventTarget {
         blobId: r.header.blobs![0]!,
         content,
         pending: pending.has(r.id),
+        unread: !!seen && r.header.author !== this.me && !(r.id in seen),
         reactions: [...counts].map(([emoji, c]) => ({ emoji, ...c })).sort((x, y) => y.count - x.count),
         replies: (replies.get(r.id) ?? []).sort((x, y) => x.ts - y.ts),
       });
     }
     return out.sort((a, b) => b.ts - a.ts);
+  }
+
+  /** 見た投稿の ID と期限。端末ごとに持ち、同期はしない */
+  private async seen(group: string) {
+    return (await this.db.get("meta", `seen/${group}`)) as Record<string, number> | undefined;
+  }
+
+  /**
+   * 投稿を見たことにする。初めて呼ばれたときは、それまでの投稿も全部見たことにする
+   * （この機能が入る前の投稿や、参加前の投稿がまとめて未読にならないように）
+   */
+  markSeen(group: string, posts: PostView[]) {
+    // トーク表示では画面に出た投稿ごとに呼ばれるので、読んで書くあいだに割り込まれないよう順に処理する
+    const run = this.seenQueue.then(() => this.doMarkSeen(group, posts));
+    this.seenQueue = run.catch(() => {});
+    return run;
+  }
+
+  private async doMarkSeen(group: string, posts: PostView[]) {
+    const now = Date.now();
+    const prev = await this.seen(group);
+    const add = prev ? posts : await this.posts(group);
+    if (prev && add.every((p) => p.id in prev)) return;
+    const next: Record<string, number> = {};
+    for (const [id, exp] of Object.entries(prev ?? {})) if (exp >= now) next[id] = exp;
+    for (const p of add) next[p.id] = p.exp;
+    await this.db.put("meta", next, `seen/${group}`);
+    this.changed();
   }
 
   /** 動画を取得・復号する。暗号文はローカルにキャッシュする */

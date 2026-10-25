@@ -31,6 +31,7 @@
 .hour-dots button { width: 18px; height: 18px; border: 0; padding: 0; background: none; display: grid; place-items: center; }
 .hour-dots button::after { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--line); transition: transform 0.15s, background 0.15s; }
 .hour-dots button.on::after { background: var(--text); transform: scale(1.4); }
+.hour-dots button.unread::after { background: var(--accent); }
 .hour-pager {
   display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
   overscroll-behavior-x: contain; scrollbar-width: none;
@@ -53,4 +54,5 @@
 .cal-cell.has { background: var(--soft); font-weight: 800; cursor: pointer; }
 .cal-cell.has:disabled { opacity: 1; }
 .cal-cell.today { outline: 2px solid var(--accent); outline-offset: -2px; }
-.cal-cell small { font-size: 10px; line-height: 1; color: var(--accent); font-weight: 800; }
+.cal-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--muted); }
+.cal-cell.unread .cal-dot { background: var(--accent); }

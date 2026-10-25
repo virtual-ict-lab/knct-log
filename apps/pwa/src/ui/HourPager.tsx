@@ -4,7 +4,7 @@ import type { PostView } from "../lib/engine.ts";
 import { aspectOf, groupByHour, justify, type HourPage } from "../lib/layout.ts";
 import { TextOverlay, useClipUrl } from "./GroupPage.tsx";
 import { Avatar, IconButton, Spinner } from "./common.tsx";
-import { dayKey, formatDay, formatTime } from "./hooks.ts";
+import { dayKey, formatDay, formatTime, useEngine } from "./hooks.ts";
 
 const GAP = 4;
 
@@ -26,6 +26,12 @@ export function HourPager({ posts, onOpen, onVlog }: { posts: PostView[]; onOpen
   const found = pages.findIndex((p) => p.key === current);
   const index = found < 0 ? pages.length - 1 : found;
   const page = pages[index];
+  const engine = useEngine();
+
+  // 開いているページの投稿は見たことにする（ほかの時間の未読は丸の色でわかる）
+  useEffect(() => {
+    if (page) engine.markSeen(page.posts[0]!.group, page.posts).catch(console.error);
+  }, [engine, page]);
 
   useEffect(() => {
     const el = ref.current;
@@ -71,7 +77,12 @@ export function HourPager({ posts, onOpen, onVlog }: { posts: PostView[]; onOpen
       {sameDay.length > 1 && (
         <div className="hour-dots">
           {sameDay.map(({ p, i }) => (
-            <button key={p.key} className={i === index ? "on" : ""} aria-label={`${new Date(p.ts).getHours()}:00`} onClick={() => goTo(i)} />
+            <button
+              key={p.key}
+              className={i === index ? "on" : p.posts.some((x) => x.unread) ? "unread" : ""}
+              aria-label={`${new Date(p.ts).getHours()}:00`}
+              onClick={() => goTo(i)}
+            />
           ))}
         </div>
       )}

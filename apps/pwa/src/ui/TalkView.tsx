@@ -1,10 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Hourglass, Lock } from "lucide-react";
 import type { PostView } from "../lib/engine.ts";
 import { buildTimeline } from "../lib/timeline.ts";
 import { aspectOf } from "../lib/layout.ts";
 import { Avatar, Spinner } from "./common.tsx";
-import { formatDay, formatTime } from "./hooks.ts";
+import { formatDay, formatTime, useEngine } from "./hooks.ts";
 import { TextOverlay, useClipUrl } from "./GroupPage.tsx";
 import "./group.css";
 
@@ -15,6 +15,13 @@ export function TalkView({ posts, members, onOpen }: { posts: PostView[]; member
   const me = members.find((m) => m.isMe)?.pk;
   const items = useMemo(() => buildTimeline(posts), [posts]);
   const scrolled = useRef(false);
+  const engine = useEngine();
+  const group = posts[0]?.group;
+
+  // 初めて開いたグループでは、それまでの投稿を見たことにする（Engine.markSeen）
+  useEffect(() => {
+    if (group) engine.markSeen(group, []).catch(console.error);
+  }, [engine, group]);
 
   // 開いたとき最下部へ。日付ジャンプ後や新着では動かさない
   useLayoutEffect(() => {
@@ -56,8 +63,9 @@ export function TalkView({ posts, members, onOpen }: { posts: PostView[]; member
 function ClipBubble({ post, mine, onOpen }: { post: PostView; mine: boolean; onOpen: () => void }) {
   const { url, failed, ref } = useClipUrl(post);
   const [aspect, setAspect] = useState(() => aspectOf(post));
+  const seenRef = useSeenOnView(post);
   return (
-    <div className={`msg ${mine ? "mine" : ""}`}>
+    <div className={`msg ${mine ? "mine" : ""}`} ref={seenRef}>
       {!mine && <Avatar id={post.author} name={post.authorName} size={30} />}
       <div className="msg-body">
         {!mine && <span className="msg-name">{post.authorName ?? "?"}</span>}
@@ -92,6 +100,29 @@ function ClipBubble({ post, mine, onOpen }: { post: PostView; mine: boolean; onO
       </div>
     </div>
   );
+}
+
+/** 半分以上が画面に出たら、その投稿を見たことにする */
+function useSeenOnView(post: PostView) {
+  const engine = useEngine();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!post.unread || !el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        io.disconnect();
+        engine.markSeen(post.group, [post]).catch(console.error);
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // 投稿 ID と未読かどうかだけを見る
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, post.id, post.unread]);
+  return ref;
 }
 
 /** 返信先の動画の小さなサムネイル */
