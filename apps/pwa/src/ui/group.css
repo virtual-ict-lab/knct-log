@@ -32,12 +32,18 @@
 .hour-dots button::after { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--line); transition: transform 0.15s, background 0.15s; }
 .hour-dots button.on::after { background: var(--text); transform: scale(1.4); }
 .hour-dots button.unread::after { background: var(--accent); }
+/* 動画のない所（左右の余白と下の空き）でもめくれるよう、main の余白まで広げて画面の下まで伸ばす */
+.screen main:has(> .hour-pager) { flex: 1; }
 .hour-pager {
-  display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  flex: 1; margin: 0 -16px calc(-112px - env(safe-area-inset-bottom));
+  display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
   overscroll-behavior-x: contain; scrollbar-width: none;
 }
 .hour-pager::-webkit-scrollbar { display: none; }
-.hour-page { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-top: 64px; }
+.hour-page {
+  flex: 0 0 100%; padding: 0 16px calc(112px + env(safe-area-inset-bottom));
+  scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-top: 64px;
+}
 .hour-grid { display: flex; flex-direction: column; gap: 4px; }
 .hour-row { display: flex; gap: 4px; }
 .hour-row .clip { aspect-ratio: auto; flex: 1 1 0; min-width: 0; height: 100%; border-radius: 10px; }
