@@ -7,9 +7,10 @@ import "./group.css";
 
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];
 
-/** 投稿のある日に印が付く月カレンダー。日をタップするとその日へ */
+/** 投稿のある日は日付の下に丸が付き、未読があると色が変わる。日をタップするとその日へ */
 export function CalendarSheet({ posts, onPick, onClose }: { posts: PostView[]; onPick: (key: string) => void; onClose: () => void }) {
   const counts = useMemo(() => countByDay(posts), [posts]);
+  const unread = useMemo(() => new Set(posts.filter((p) => p.unread).map((p) => dayKeyOf(p.ts))), [posts]);
   const [ym, setYm] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }));
   const shift = (n: number) =>
     setYm(({ y, m }) => {
@@ -37,9 +38,9 @@ export function CalendarSheet({ posts, onPick, onClose }: { posts: PostView[]; o
           const key = `${ym.y}-${ym.m + 1}-${day}`;
           const n = counts.get(key) ?? 0;
           return (
-            <button key={i} className={`cal-cell ${n ? "has" : ""} ${key === today ? "today" : ""}`} data-day={key} disabled={!n} onClick={() => onPick(key)} aria-label={`${ym.m + 1}/${day}${n ? ` ${n}` : ""}`}>
+            <button key={i} className={`cal-cell ${n ? "has" : ""} ${key === today ? "today" : ""} ${unread.has(key) ? "unread" : ""}`} data-day={key} disabled={!n} onClick={() => onPick(key)} aria-label={`${ym.m + 1}/${day}${n ? ` ${n}` : ""}`}>
               {day}
-              {n > 0 && <small>{n}</small>}
+              {n > 0 && <i className="cal-dot" />}
             </button>
           );
         })}
