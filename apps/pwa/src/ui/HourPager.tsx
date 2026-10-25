@@ -7,6 +7,8 @@ import { Avatar, IconButton, Spinner } from "./common.tsx";
 import { dayKey, formatDay, formatTime, useEngine } from "./hooks.ts";
 
 const GAP = 4;
+/** .hour-page の左右の余白（group.css） */
+const SIDE = 16;
 
 /**
  * 1 時間を 1 ページにして横にめくる。最初は最新の時間を開く。
@@ -92,7 +94,7 @@ export function HourPager({ posts, onOpen, onVlog }: { posts: PostView[]; onOpen
             {Math.abs(i - index) <= 1 && width > 0 && (
               <HourGrid
                 page={p}
-                width={width}
+                width={width - SIDE * 2}
                 measured={measured}
                 onMeasure={(id, a) => setMeasured((m) => (m.get(id) === a ? m : new Map(m).set(id, a)))}
                 onOpen={onOpen}
